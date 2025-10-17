@@ -5,4 +5,5 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 .env
-
+__pycache__/
+*.pyc

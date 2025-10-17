@@ -1,7 +1,11 @@
 import uuid
+import json
+from typing import List, Self, Optional
 
-from pydantic import EmailStr
+from pydantic import EmailStr, field_validator
 from sqlmodel import Field, Relationship, SQLModel
+from sqlalchemy import JSON
+
 
 
 # Shared properties
@@ -111,3 +115,52 @@ class TokenPayload(SQLModel):
 class NewPassword(SQLModel):
     token: str
     new_password: str = Field(min_length=8, max_length=40)
+
+
+class ExerciseTag(SQLModel, table=True):
+    exercise_id: uuid.UUID = Field(
+        foreign_key="exercise.id", primary_key=True
+    )
+    tag_id: uuid.UUID = Field(
+        foreign_key="tag.id", primary_key=True
+    )
+    #relationships
+    exercise: "Exercise" = Relationship(back_populates="tags")
+    tag: "Tag" = Relationship(back_populates="exercises")
+
+
+class ExerciseBase(SQLModel):
+    """
+    Base model for an exercise.
+    """
+    source_name: str = Field(max_length=255)
+    source_id: str = Field(max_length=255)
+    text: str
+    solution: str
+    formula: str|None = None
+    illustration: str|None = None
+  
+
+class Exercise(ExerciseBase, table=True):
+    """
+    Database model for an exercise.
+    """
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    tags: list["Tag"] = Relationship(back_populates="exercises", link_model=ExerciseTag)
+
+class ExercisesPublic(SQLModel):
+    data: list[Exercise]
+    count: int
+
+
+class TagBase(SQLModel):
+    name: str = Field(unique=True, index=True, max_length=255)
+    description: Optional[str] = None
+
+
+class Tag(TagBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    exercises: List["Exercise"] = Relationship(back_populates="tags", link_model=ExerciseTag)
+
+
+
