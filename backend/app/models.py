@@ -124,9 +124,7 @@ class ExerciseTag(SQLModel, table=True):
     tag_id: uuid.UUID = Field(
         foreign_key="tag.id", primary_key=True
     )
-    #relationships
-    exercise: "Exercise" = Relationship(back_populates="tags")
-    tag: "Tag" = Relationship(back_populates="exercises")
+
 
 
 class ExerciseBase(SQLModel):
@@ -139,6 +137,20 @@ class ExerciseBase(SQLModel):
     solution: str
     formula: str|None = None
     illustration: str|None = None
+
+class ExerciseCreate(ExerciseBase):
+    """
+    Model for creating a new exercise.
+    """
+    pass
+
+class ExerciseUpdate(ExerciseBase):
+    source_name: str | None = Field(default=None, max_length=255)  
+    source_id: str | None = Field(default=None, max_length=255) 
+    text: str | None = None
+    solution: str | None = None
+    formula: str | None = None
+    illustration: str | None = None
   
 
 class Exercise(ExerciseBase, table=True):
@@ -148,8 +160,12 @@ class Exercise(ExerciseBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     tags: list["Tag"] = Relationship(back_populates="exercises", link_model=ExerciseTag)
 
+class ExercisePublic(ExerciseBase):
+    id: uuid.UUID
+    tags: list["Tag"] = []
+
 class ExercisesPublic(SQLModel):
-    data: list[Exercise]
+    data: list[ExercisePublic]
     count: int
 
 
@@ -157,10 +173,24 @@ class TagBase(SQLModel):
     name: str = Field(unique=True, index=True, max_length=255)
     description: Optional[str] = None
 
+class TagCreate(TagBase):
+    pass
+
+class TagUpdate(TagBase):
+    name: str | None = Field(default=None, max_length=255)  
+    description: Optional[str] = None
+
 
 class Tag(TagBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     exercises: List["Exercise"] = Relationship(back_populates="tags", link_model=ExerciseTag)
+
+class TagPublic(TagBase):
+    id: uuid.UUID
+
+class TagsPublic(SQLModel):
+    data: list[TagPublic]
+    count: int
 
 
 
