@@ -4,8 +4,7 @@ from typing import Any
 from sqlmodel import Session, select
 
 from app.core.security import get_password_hash, verify_password
-from app.models import Item, ItemCreate, User, UserCreate, UserUpdate
-
+from app.models import Item, ItemCreate, User, UserCreate, UserUpdate, Exercise, ExerciseCreate, Tag, TagCreate
 
 def create_user(*, session: Session, user_create: UserCreate) -> User:
     db_obj = User.model_validate(
@@ -52,3 +51,18 @@ def create_item(*, session: Session, item_in: ItemCreate, owner_id: uuid.UUID) -
     session.commit()
     session.refresh(db_item)
     return db_item
+
+def create_exercise(*, session: Session, exercise_in: ExerciseCreate) -> Exercise:
+    db_exercise = Exercise.model_validate(exercise_in)
+    session.add(db_exercise)
+    session.commit()
+    session.refresh(db_exercise)
+    return db_exercise
+
+def create_tag(*, session: Session, tag_in: Tag) -> None:
+
+    db_tag = Tag.model_validate(tag_in)
+    session.add(db_tag)
+    session.commit()
+    session.refresh(db_tag)
+    return db_tag

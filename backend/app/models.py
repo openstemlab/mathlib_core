@@ -151,6 +151,7 @@ class ExerciseUpdate(ExerciseBase):
     solution: str | None = None
     formula: str | None = None
     illustration: str | None = None
+    tags: list["Tag"]|None = None
   
 
 class Exercise(ExerciseBase, table=True):
