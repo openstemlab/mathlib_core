@@ -1,6 +1,6 @@
 import uuid
 import json
-from typing import List, Self, Optional
+from typing import Optional
 
 from pydantic import EmailStr, field_validator
 from sqlmodel import Field, Relationship, SQLModel
@@ -48,6 +48,7 @@ class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
     items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
+    quizzes: list["Quiz"]= Relationship(back_populates="owner", cascade_delete=True)
 
 
 # Properties to return via API, id is always required
@@ -125,7 +126,13 @@ class ExerciseTag(SQLModel, table=True):
         foreign_key="tag.id", primary_key=True
     )
 
-
+class QuizExercise(SQLModel, table=True):
+    quiz_id: uuid.UUID = Field(
+        foreign_key="quiz.id", primary_key=True
+    )
+    exercise_id: uuid.UUID = Field(
+        foreign_key="exercise.id", primary_key=True
+    )
 
 class ExerciseBase(SQLModel):
     """
@@ -135,8 +142,10 @@ class ExerciseBase(SQLModel):
     source_id: str = Field(max_length=255)
     text: str
     solution: str
+    false_answers: list[str] = Field(sa_type=JSON, default_factory=list)
     formula: str|None = None
     illustration: str|None = None
+
 
 class ExerciseCreate(ExerciseBase):
     """
@@ -160,10 +169,11 @@ class Exercise(ExerciseBase, table=True):
     """
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     tags: list["Tag"] = Relationship(back_populates="exercises", link_model=ExerciseTag)
+    quizzes: list["Quiz"] = Relationship(back_populates="exercises", link_model=QuizExercise)
 
 class ExercisePublic(ExerciseBase):
     id: uuid.UUID
-    tags: list["Tag"] = []
+
 
 class ExercisesPublic(SQLModel):
     data: list[ExercisePublic]
@@ -184,13 +194,40 @@ class TagUpdate(TagBase):
 
 class Tag(TagBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    exercises: List["Exercise"] = Relationship(back_populates="tags", link_model=ExerciseTag)
+    exercises: list[Exercise] = Relationship(back_populates="tags", link_model=ExerciseTag)
 
 class TagPublic(TagBase):
     id: uuid.UUID
 
 class TagsPublic(SQLModel):
     data: list[TagPublic]
+    count: int
+
+
+
+class QuizBase(SQLModel):
+    is_active: bool = False
+
+class QuizCreate(QuizBase):
+    pass
+
+class QuizUpdate(QuizBase):
+    is_active: bool
+
+class Quiz(QuizBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    owner_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    owner: User | None = Relationship(back_populates="quizzes")
+    exercises: list[Exercise] = Relationship(back_populates="quizzes", link_model=QuizExercise)
+
+class QuizPublic(QuizBase):
+    id: uuid.UUID
+    owner_id: uuid.UUID
+
+class QuizzesPublic(SQLModel):
+    data: list[QuizPublic]
     count: int
 
 
