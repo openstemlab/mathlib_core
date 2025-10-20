@@ -51,12 +51,12 @@ def create_exercise_not_enough_permissions(
 
 
 def test_read_exercise(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
     exercise = create_random_exercise(db)
     response = client.get(
         f"{settings.API_V1_STR}/exercises/{exercise.id}",
-        headers=superuser_token_headers,
+        headers=normal_user_token_headers,
     )
     assert response.status_code == 200
     content = response.json()
@@ -69,11 +69,11 @@ def test_read_exercise(
 
 
 def test_read_exercise_not_found(
-    client: TestClient, superuser_token_headers: dict[str, str]
+    client: TestClient, normal_user_token_headers: dict[str, str]
 ) -> None:
     response = client.get(
         f"{settings.API_V1_STR}/exercises/{uuid.uuid4()}",
-        headers=superuser_token_headers,
+        headers=normal_user_token_headers,
     )
     assert response.status_code == 404
     content = response.json()
@@ -81,13 +81,13 @@ def test_read_exercise_not_found(
 
 
 def test_read_exercises(
-        client: TestClient, superuser_token_headers: dict[str, str], db: Session
+        client: TestClient, normal_user_token_headers: dict[str, str], db: Session
 )-> None:
     create_random_exercise(db)
     create_random_exercise(db)
     response = client.get(
         f"{settings.API_V1_STR}/exercises/",
-        headers=superuser_token_headers,
+        headers=normal_user_token_headers,
     )
     assert response.status_code == 200
     content = response.json()
@@ -129,7 +129,7 @@ def test_update_exercise_not_found(
 ) -> None:
     tag1 = create_random_tag(db)
     tag2 = create_random_tag(db)
-    tags = [tag1.model_dump(), tag2.model_dump()]
+    tags = [tag1.model_dump_json(), tag2.model_dump_json()]
     data = {
         "source_name": "UpdatedSource",
         "source_id": "002",

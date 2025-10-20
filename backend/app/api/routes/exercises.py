@@ -65,7 +65,7 @@ def update_exercise(
     session.refresh(exercise)
     return exercise
 
-@router.delete("/{id}", response_model=ExercisePublic)
+@router.delete("/{id}")
 def delete_exercise(
     *, session: SessionDep, current_user: CurrentUser, id: uuid.UUID
 ) -> Message:

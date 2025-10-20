@@ -59,7 +59,7 @@ def create_exercise(*, session: Session, exercise_in: ExerciseCreate) -> Exercis
     session.refresh(db_exercise)
     return db_exercise
 
-def create_tag(*, session: Session, tag_in: Tag) -> None:
+def create_tag(*, session: Session, tag_in: TagCreate) -> None:
 
     db_tag = Tag.model_validate(tag_in)
     session.add(db_tag)
