@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.core.config import settings
+from app.models import ExerciseTag, TagPublic
 from tests.utils.exercise import create_random_exercise
 from tests.utils.tags import create_random_tag
 
@@ -28,7 +29,7 @@ def test_create_exercise(
     assert content["text"] == data["text"]
     assert content["solution"] == data["solution"]
     assert "id" in content
-    assert "tags" in content
+
 
 
 def create_exercise_not_enough_permissions(
@@ -54,6 +55,13 @@ def test_read_exercise(
     client: TestClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
     exercise = create_random_exercise(db)
+    tag = create_random_tag(db)
+
+    exercise_tag = ExerciseTag(exercise_id=exercise.id, tag_id=tag.id)
+    db.add(exercise_tag)
+    db.commit()
+    db.refresh(exercise)
+    
     response = client.get(
         f"{settings.API_V1_STR}/exercises/{exercise.id}",
         headers=normal_user_token_headers,
@@ -65,7 +73,10 @@ def test_read_exercise(
     assert content["text"] == exercise.text
     assert content["solution"] == exercise.solution
     assert content["id"] == str(exercise.id)
-    assert "tags" in content
+    assert len(content["tags"]) > 0
+    assert content["tags"][0]["id"] == str(tag.id)
+    assert content["tags"][0]["name"] == tag.name
+
 
 
 def test_read_exercise_not_found(
@@ -101,7 +112,10 @@ def test_update_exercise(
     tag1 = create_random_tag(db)
     tag2 = create_random_tag(db)
     
-    tags = [tag1, tag2]
+    tags = [
+        {"id": tag1.id, "name": tag1.name, "description": tag1.description},
+        {"id": tag2.id, "name": tag2.name, "description": tag2.description}
+    ]
     data = {
         "source_name": "UpdatedSource",
         "source_id": "002",
@@ -110,7 +124,7 @@ def test_update_exercise(
         "tags": tags,
     }
     response = client.put(
-        f"{settings.API_V1_STR}/exercises/{exercise.id}",
+        f"{settings.API_V1_STR}/exercises/{str(exercise.id)}",
         headers=superuser_token_headers,
         json=data,
     )
@@ -129,7 +143,10 @@ def test_update_exercise_not_found(
 ) -> None:
     tag1 = create_random_tag(db)
     tag2 = create_random_tag(db)
-    tags = [tag1.model_dump_json(), tag2.model_dump_json()]
+    tags = [
+        {"id": tag1.id, "name": tag1.name, "description": tag1.description},
+        {"id": tag2.id, "name": tag2.name, "description": tag2.description}
+    ]
     data = {
         "source_name": "UpdatedSource",
         "source_id": "002",
@@ -153,7 +170,10 @@ def test_update_exercise_not_enough_permissions(
     tag1 = create_random_tag(db)
     
     tag2 = create_random_tag(db)
-    tags = [tag1.model_dump(), tag2.model_dump()]
+    tags = [
+        {"id": tag1.id, "name": tag1.name, "description": tag1.description},
+        {"id": tag2.id, "name": tag2.name, "description": tag2.description}
+    ]
     data = {
         "source_name": "UpdatedSource",
         "source_id": "002",

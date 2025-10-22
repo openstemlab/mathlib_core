@@ -45,7 +45,7 @@ class UpdatePassword(SQLModel):
 
 # Database model, database table inferred from class name
 class User(UserBase, table=True):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: str = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
     items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
     quizzes: list["Quiz"]= Relationship(back_populates="owner", cascade_delete=True)
@@ -53,7 +53,7 @@ class User(UserBase, table=True):
 
 # Properties to return via API, id is always required
 class UserPublic(UserBase):
-    id: uuid.UUID
+    id: str
 
 
 class UsersPublic(SQLModel):
@@ -79,8 +79,8 @@ class ItemUpdate(ItemBase):
 
 # Database model, database table inferred from class name
 class Item(ItemBase, table=True):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    owner_id: uuid.UUID = Field(
+    id: str = Field(default_factory=uuid.uuid4, primary_key=True)
+    owner_id:str = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
     )
     owner: User | None = Relationship(back_populates="items")
@@ -88,8 +88,8 @@ class Item(ItemBase, table=True):
 
 # Properties to return via API, id is always required
 class ItemPublic(ItemBase):
-    id: uuid.UUID
-    owner_id: uuid.UUID
+    id: str
+    owner_id: str
 
 
 class ItemsPublic(SQLModel):
@@ -119,18 +119,22 @@ class NewPassword(SQLModel):
 
 
 class ExerciseTag(SQLModel, table=True):
-    exercise_id: uuid.UUID = Field(
-        foreign_key="exercise.id", primary_key=True
+    exercise_id: str = Field(
+        default=None,
+        foreign_key="exercise.id", 
+        primary_key=True
     )
-    tag_id: uuid.UUID = Field(
-        foreign_key="tag.id", primary_key=True
+    tag_id: str = Field(
+        default=None,
+        foreign_key="tag.id", 
+        primary_key=True
     )
 
 class QuizExercise(SQLModel, table=True):
-    quiz_id: uuid.UUID = Field(
+    quiz_id: str = Field(
         foreign_key="quiz.id", primary_key=True
     )
-    exercise_id: uuid.UUID = Field(
+    exercise_id: str = Field(
         foreign_key="exercise.id", primary_key=True
     )
 
@@ -160,19 +164,20 @@ class ExerciseUpdate(ExerciseBase):
     solution: str | None = None
     formula: str | None = None
     illustration: str | None = None
-    tags: list["Tag"]|None = None
+    tags: list[dict]|None = None
   
 
 class Exercise(ExerciseBase, table=True):
     """
     Database model for an exercise.
     """
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: str = Field(default_factory=uuid.uuid4, primary_key=True)
     tags: list["Tag"] = Relationship(back_populates="exercises", link_model=ExerciseTag)
     quizzes: list["Quiz"] = Relationship(back_populates="exercises", link_model=QuizExercise)
 
 class ExercisePublic(ExerciseBase):
-    id: uuid.UUID
+    id: str
+    tags: list["TagPublic"] = []
 
 
 class ExercisesPublic(SQLModel):
@@ -187,17 +192,19 @@ class TagBase(SQLModel):
 class TagCreate(TagBase):
     pass
 
+
 class TagUpdate(TagBase):
     name: str | None = Field(default=None, max_length=255)  
     description: Optional[str] = None
+    exercises: list["Exercise"]|None = None
 
 
 class Tag(TagBase, table=True):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: str = Field(default_factory=uuid.uuid4, primary_key=True)
     exercises: list[Exercise] = Relationship(back_populates="tags", link_model=ExerciseTag)
 
 class TagPublic(TagBase):
-    id: uuid.UUID
+    id: str
 
 class TagsPublic(SQLModel):
     data: list[TagPublic]
@@ -212,19 +219,20 @@ class QuizCreate(QuizBase):
     pass
 
 class QuizUpdate(QuizBase):
-    is_active: bool
+    is_active: bool|None = None
 
 class Quiz(QuizBase, table=True):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    owner_id: uuid.UUID = Field(
+    id: str = Field(default_factory=uuid.uuid4, primary_key=True)
+    owner_id: str = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
     )
     owner: User | None = Relationship(back_populates="quizzes")
-    exercises: list[Exercise] = Relationship(back_populates="quizzes", link_model=QuizExercise)
+    exercises: list["Exercise"]=Relationship(back_populates="quizzes", link_model=QuizExercise)
 
 class QuizPublic(QuizBase):
-    id: uuid.UUID
-    owner_id: uuid.UUID
+    id: str
+    owner_id: str
+    exercises: list[ExercisePublic]
 
 class QuizzesPublic(SQLModel):
     data: list[QuizPublic]

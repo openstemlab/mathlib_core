@@ -6,16 +6,20 @@ from sqlmodel import Session
 from app.core.config import settings
 from tests.utils.tags import create_random_tag
 from tests.utils.exercise import create_random_exercise
-from app.models import Tag
+from tests.utils.utils import random_lower_string
+from app.models import TagPublic, ExercisePublic
 
 def test_create_tag(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
-    data = create_random_tag(db)
+    data = {
+        "id": str(uuid.uuid4()),
+        "name": random_lower_string(),
+        "description": random_lower_string() }
     response = client.post(
         f"{settings.API_V1_STR}/tags/",
         headers=superuser_token_headers,
-        json=data.model_dump_json(),
+        json=data,
     )
     assert response.status_code == 200
     content = response.json()
@@ -86,13 +90,18 @@ def test_read_tags(
 def test_update_tag(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
-    tag = Tag(name="InitialTag", description="Initial description", id=uuid.uuid4())
+    tag = create_random_tag(db)
+    tag_data = TagPublic.model_validate(tag).model_dump()
+    exercise = create_random_exercise(db)
+    exercise_data = ExercisePublic.model_validate(exercise).model_dump()
+    tag_name = random_lower_string()
     update_data = {
-        "name": "UpdatedTagName", 
+        "name": tag_name, 
         "description": "Updated description",
+        "exercises": [exercise_data,],
     }
     response = client.put(
-        f"{settings.API_V1_STR}/tags/{tag.id}",
+        f"{settings.API_V1_STR}/tags/{tag_data["id"]}",
         headers=superuser_token_headers,
         json=update_data,
     )
@@ -100,7 +109,7 @@ def test_update_tag(
     content = response.json()
     assert content["name"] == update_data["name"]
     assert content["description"] == update_data["description"]
-    assert content["id"] == str(tag.id)
+    assert content["id"] == tag.id
 
 
     def test_update_tag_not_found(
