@@ -41,14 +41,14 @@ def read_exercises(
 
 
 @router.get("/{id}", response_model=ExercisePublic)
-def read_exercise(session: SessionDep, id: uuid.UUID)-> Any:
+def read_exercise(session: SessionDep, id: str)-> Any:
     """
     Get exercise by ID.
     """
     exercise = session.get(Exercise, id)
     if not exercise:
         raise HTTPException(status_code=404, detail="Exercise not found")
-    tags = []
+
     stmt = select(Tag).join(ExerciseTag).where(ExerciseTag.exercise_id == exercise.id)
     db_tags = session.exec(stmt).all()
     
@@ -84,7 +84,7 @@ def create_exercise(
 
 @router.put("/{id}", response_model=ExercisePublic)
 def update_exercise(
-    *, session: SessionDep, current_user: CurrentUser, id: uuid.UUID, exercise_in: ExerciseUpdate
+    *, session: SessionDep, current_user: CurrentUser, id: str, exercise_in: ExerciseUpdate
 ) -> Any:
     """
     Update an existing exercise.
@@ -139,7 +139,7 @@ def update_exercise(
 
 @router.delete("/{id}")
 def delete_exercise(
-    *, session: SessionDep, current_user: CurrentUser, id: uuid.UUID
+    *, session: SessionDep, current_user: CurrentUser, id: str
 ) -> Message:
     """
     Delete an exercise.

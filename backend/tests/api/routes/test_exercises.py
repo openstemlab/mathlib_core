@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.core.config import settings
-from app.models import ExerciseTag, TagPublic
+from app.models import ExerciseTag
 from tests.utils.exercise import create_random_exercise
 from tests.utils.tags import create_random_tag
 

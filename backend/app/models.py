@@ -132,10 +132,14 @@ class ExerciseTag(SQLModel, table=True):
 
 class QuizExercise(SQLModel, table=True):
     quiz_id: str = Field(
-        foreign_key="quiz.id", primary_key=True
+        foreign_key="quiz.id", 
+        primary_key=True,
+        ondelete="CASCADE",
     )
     exercise_id: str = Field(
-        foreign_key="exercise.id", primary_key=True
+        foreign_key="exercise.id", 
+        primary_key=True,
+        ondelete="CASCADE",
     )
 
 class ExerciseBase(SQLModel):
@@ -146,7 +150,13 @@ class ExerciseBase(SQLModel):
     source_id: str = Field(max_length=255)
     text: str
     solution: str
-    false_answers: list[str] = Field(sa_type=JSON, default_factory=list)
+    false_answers: list[str] = Field(
+        sa_type=JSON,
+        default_factory=list,
+        schema_extra={
+            "type":"array", 
+            "items":{"type":"string"}
+            })
     formula: str|None = None
     illustration: str|None = None
 
