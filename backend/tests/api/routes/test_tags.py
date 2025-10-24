@@ -9,13 +9,15 @@ from tests.utils.exercise import create_random_exercise
 from tests.utils.utils import random_lower_string
 from app.models import TagPublic, ExercisePublic
 
+
 def test_create_tag(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
     data = {
         "id": str(uuid.uuid4()),
         "name": random_lower_string(),
-        "description": random_lower_string() }
+        "description": random_lower_string(),
+    }
     response = client.post(
         f"{settings.API_V1_STR}/tags/",
         headers=superuser_token_headers,
@@ -41,6 +43,7 @@ def test_create_tag_not_enough_permissions(
     content = response.json()
     assert content["detail"] == "Not enough permissions"
 
+
 def test_read_tag(
     client: TestClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
@@ -54,6 +57,7 @@ def test_read_tag(
     assert content["name"] == tag.name
     assert content["description"] == tag.description
     assert content["id"] == str(tag.id)
+
 
 def test_read_tag_not_found(
     client: TestClient, normal_user_token_headers: dict[str, str]
@@ -96,9 +100,11 @@ def test_update_tag(
     exercise_data = ExercisePublic.model_validate(exercise).model_dump()
     tag_name = random_lower_string()
     update_data = {
-        "name": tag_name, 
+        "name": tag_name,
         "description": "Updated description",
-        "exercises": [exercise_data,],
+        "exercises": [
+            exercise_data,
+        ],
     }
     response = client.put(
         f"{settings.API_V1_STR}/tags/{tag_data["id"]}",
@@ -110,7 +116,6 @@ def test_update_tag(
     assert content["name"] == update_data["name"]
     assert content["description"] == update_data["description"]
     assert content["id"] == tag.id
-
 
     def test_update_tag_not_found(
         client: TestClient, superuser_token_headers: dict[str, str]
@@ -153,6 +158,7 @@ def test_delete_tag(
     content = response.json()
     assert content["message"] == "Tag deleted successfully"
 
+
 def test_delete_tag_not_found(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
@@ -163,6 +169,7 @@ def test_delete_tag_not_found(
     assert response.status_code == 404
     content = response.json()
     assert content["detail"] == "Tag not found"
+
 
 def test_delete_tag_not_enough_permissions(
     client: TestClient, normal_user_token_headers: dict[str, str], db: Session

@@ -3,7 +3,10 @@ from sqlmodel import Session, select
 
 from app.models import Exercise, ExerciseTag, TagPublic, Quiz, QuizPublic
 
-def form_quiz(length: int, tags: list[TagPublic], owner_id: str, session: Session) -> QuizPublic:
+
+def form_quiz(
+    length: int, tags: list[TagPublic], owner_id: str, session: Session
+) -> QuizPublic:
     """
     Form a quiz by selecting exercises based on the provided tags and populate a Quiz model.
 
@@ -22,7 +25,7 @@ def form_quiz(length: int, tags: list[TagPublic], owner_id: str, session: Sessio
         .limit(length)
         .subquery()
     )
-    
+
     # Затем получаем полные объекты Exercise по этим ID
     statement = select(Exercise).where(Exercise.id.in_(select(subquery.c.id)))
     exercises = session.exec(statement).all()

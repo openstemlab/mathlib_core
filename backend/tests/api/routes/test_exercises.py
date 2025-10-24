@@ -8,14 +8,15 @@ from app.models import ExerciseTag
 from tests.utils.exercise import create_random_exercise
 from tests.utils.tags import create_random_tag
 
+
 def test_create_exercise(
-        client: TestClient, superuser_token_headers: dict[str, str]
-    ) -> None:
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
     data = {
         "source_name": "SourceA",
         "source_id": "001",
         "text": "What is 2 + 2?",
-        "solution": "4"
+        "solution": "4",
     }
     response = client.post(
         f"{settings.API_V1_STR}/exercises/",
@@ -31,7 +32,6 @@ def test_create_exercise(
     assert "id" in content
 
 
-
 def create_exercise_not_enough_permissions(
     client: TestClient, normal_user_token_headers: dict[str, str]
 ) -> None:
@@ -39,7 +39,7 @@ def create_exercise_not_enough_permissions(
         "source_name": "SourceA",
         "source_id": "001",
         "text": "What is 2 + 2?",
-        "solution": "4"
+        "solution": "4",
     }
     response = client.post(
         f"{settings.API_V1_STR}/exercises/",
@@ -61,7 +61,7 @@ def test_read_exercise(
     db.add(exercise_tag)
     db.commit()
     db.refresh(exercise)
-    
+
     response = client.get(
         f"{settings.API_V1_STR}/exercises/{exercise.id}",
         headers=normal_user_token_headers,
@@ -78,7 +78,6 @@ def test_read_exercise(
     assert content["tags"][0]["name"] == tag.name
 
 
-
 def test_read_exercise_not_found(
     client: TestClient, normal_user_token_headers: dict[str, str]
 ) -> None:
@@ -92,8 +91,8 @@ def test_read_exercise_not_found(
 
 
 def test_read_exercises(
-        client: TestClient, normal_user_token_headers: dict[str, str], db: Session
-)-> None:
+    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
+) -> None:
     create_random_exercise(db)
     create_random_exercise(db)
     response = client.get(
@@ -111,10 +110,10 @@ def test_update_exercise(
     exercise = create_random_exercise(db)
     tag1 = create_random_tag(db)
     tag2 = create_random_tag(db)
-    
+
     tags = [
         {"id": tag1.id, "name": tag1.name, "description": tag1.description},
-        {"id": tag2.id, "name": tag2.name, "description": tag2.description}
+        {"id": tag2.id, "name": tag2.name, "description": tag2.description},
     ]
     data = {
         "source_name": "UpdatedSource",
@@ -138,6 +137,7 @@ def test_update_exercise(
     assert content["tags"] == data["tags"]
     assert len(content["tags"]) >= 2
 
+
 def test_update_exercise_not_found(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
@@ -145,7 +145,7 @@ def test_update_exercise_not_found(
     tag2 = create_random_tag(db)
     tags = [
         {"id": tag1.id, "name": tag1.name, "description": tag1.description},
-        {"id": tag2.id, "name": tag2.name, "description": tag2.description}
+        {"id": tag2.id, "name": tag2.name, "description": tag2.description},
     ]
     data = {
         "source_name": "UpdatedSource",
@@ -163,16 +163,17 @@ def test_update_exercise_not_found(
     content = response.json()
     assert content["detail"] == "Exercise not found"
 
+
 def test_update_exercise_not_enough_permissions(
     client: TestClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
     exercise = create_random_exercise(db)
     tag1 = create_random_tag(db)
-    
+
     tag2 = create_random_tag(db)
     tags = [
         {"id": tag1.id, "name": tag1.name, "description": tag1.description},
-        {"id": tag2.id, "name": tag2.name, "description": tag2.description}
+        {"id": tag2.id, "name": tag2.name, "description": tag2.description},
     ]
     data = {
         "source_name": "UpdatedSource",
@@ -203,6 +204,7 @@ def test_delete_exercise(
     content = response.json()
     assert content["message"] == "Exercise deleted successfully"
 
+
 def test_delete_exercise_not_found(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
@@ -214,6 +216,7 @@ def test_delete_exercise_not_found(
     content = response.json()
     assert content["detail"] == "Exercise not found"
 
+
 def test_delete_exercise_not_enough_permissions(
     client: TestClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
@@ -224,5 +227,4 @@ def test_delete_exercise_not_enough_permissions(
     )
     assert response.status_code == 403
     content = response.json()
-    assert content["detail"] == "Not enough permissions" 
-
+    assert content["detail"] == "Not enough permissions"

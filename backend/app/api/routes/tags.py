@@ -4,15 +4,22 @@ from fastapi import APIRouter, HTTPException
 from sqlmodel import select, func
 
 from app.api.deps import CurrentUser, SessionDep
-from app.models import Tag, TagCreate, TagUpdate, TagPublic, TagsPublic, Exercise, Message
+from app.models import (
+    Tag,
+    TagCreate,
+    TagUpdate,
+    TagPublic,
+    TagsPublic,
+    Exercise,
+    Message,
+)
 
 
 router = APIRouter(prefix="/tags", tags=["tags"])
 
+
 @router.get("/", response_model=TagsPublic)
-def read_tags(
-    session: SessionDep, skip: int = 0, limit: int = 100
-) -> TagsPublic:
+def read_tags(session: SessionDep, skip: int = 0, limit: int = 100) -> TagsPublic:
     """
     Retrieve tags.
     """
@@ -21,6 +28,7 @@ def read_tags(
     statement = select(Tag).offset(skip).limit(limit)
     tags = session.exec(statement).all()
     return TagsPublic(data=tags, count=count)
+
 
 @router.get("/{id}", response_model=TagPublic)
 def read_tag(session: SessionDep, id: uuid.UUID) -> TagPublic:
@@ -32,6 +40,7 @@ def read_tag(session: SessionDep, id: uuid.UUID) -> TagPublic:
         raise HTTPException(status_code=404, detail="Tag not found")
     return tag
 
+
 @router.post("/", response_model=TagPublic)
 def create_tag(
     *, session: SessionDep, current_user: CurrentUser, tag_in: TagCreate
@@ -41,19 +50,12 @@ def create_tag(
     """
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
-    tag = Tag(
-        id=str(uuid.uuid4()),
-        name=tag_in.name,
-        description=tag_in.description
-    )
+    tag = Tag(id=str(uuid.uuid4()), name=tag_in.name, description=tag_in.description)
     session.add(tag)
     session.commit()
     session.refresh(tag)
-    return TagPublic(
-        id=tag.id,
-        name=tag.name,
-        description=tag.description
-    )
+    return TagPublic(id=tag.id, name=tag.name, description=tag.description)
+
 
 @router.put("/{id}", response_model=TagPublic)
 def update_tag(
@@ -75,9 +77,7 @@ def update_tag(
                 raise HTTPException(status_code=422, detail="Exercise ID is required")
             exercise_object = session.get(Exercise, exercise["id"])
             if not exercise_object:
-                raise HTTPException(
-                    status_code=404, detail="Exercise not found"
-                )
+                raise HTTPException(status_code=404, detail="Exercise not found")
             tag.exercises.append(exercise_object)
         del tag_data["exercises"]
     tag.sqlmodel_update(tag_data)
@@ -85,6 +85,7 @@ def update_tag(
     session.commit()
     session.refresh(tag)
     return tag
+
 
 @router.delete("/{id}")
 def delete_tag(
