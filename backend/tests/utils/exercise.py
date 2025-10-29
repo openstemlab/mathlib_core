@@ -6,6 +6,8 @@ from tests.utils.utils import random_lower_string
 
 
 def create_random_exercise(db: Session) -> Exercise:
+    """Creates a randomised exercise."""
+    
     source_name = random_lower_string()
     source_id = random_lower_string()
     text = random_lower_string()

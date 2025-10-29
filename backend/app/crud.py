@@ -18,6 +18,13 @@ from app.models import (
 
 
 def create_user(*, session: Session, user_create: UserCreate) -> User:
+    """Function to create a user.
+    
+    :param session: The SQLAlchemy session object.
+    :param user_create: The user data to create a User.
+    :returns: User object.
+    """
+
     db_obj = User.model_validate(
         user_create, update={"hashed_password": get_password_hash(user_create.password)}
     )
@@ -28,6 +35,14 @@ def create_user(*, session: Session, user_create: UserCreate) -> User:
 
 
 def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
+    """Function to update a user.
+
+    :param session: The SQLAlchemy session object.
+    :param db_user: User object from database.
+    :param user_in: UserUpdate object with data to change.
+    :returns: updated User object.
+    """
+
     user_data = user_in.model_dump(exclude_unset=True)
     extra_data = {}
     if "password" in user_data:
@@ -42,12 +57,27 @@ def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
 
 
 def get_user_by_email(*, session: Session, email: str) -> User | None:
+    """Function to get a User object from database by email.
+    
+    :param session: The SQLAlchemy session object
+    :param email: email string.
+    :returns: User object
+    """
+
     statement = select(User).where(User.email == email)
     session_user = session.exec(statement).first()
     return session_user
 
 
 def authenticate(*, session: Session, email: str, password: str) -> User | None:
+    """Function to get a user authentificated.
+    
+    :param session: The SQLAlchemy session object.
+    :param email: email string to find a user.
+    :param password: password for a user.
+    :returns: User object
+    """
+
     db_user = get_user_by_email(session=session, email=email)
     if not db_user:
         return None
@@ -57,6 +87,14 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
 
 
 def create_item(*, session: Session, item_in: ItemCreate, owner_id: uuid.UUID) -> Item:
+    """Function to create an item.
+    
+    :param session: The SQLAlchemy session object.
+    :param item_in: Item data to create an item.
+    :param owner_id: User id to assign item.
+    :returns: Item object.
+    """
+
     db_item = Item.model_validate(item_in, update={"owner_id": owner_id})
     session.add(db_item)
     session.commit()
@@ -65,6 +103,13 @@ def create_item(*, session: Session, item_in: ItemCreate, owner_id: uuid.UUID) -
 
 
 def create_exercise(*, session: Session, exercise_in: ExerciseCreate) -> Exercise:
+    """Function to create an exercise.
+
+    :param session: The SQLAlchemy session object.
+    :param exercise_in: exercise data to create an Exercise from.
+    :returns: Exercise object.
+    """
+    
     db_exercise = Exercise.model_validate(exercise_in)
     session.add(db_exercise)
     session.commit()
@@ -73,6 +118,13 @@ def create_exercise(*, session: Session, exercise_in: ExerciseCreate) -> Exercis
 
 
 def create_tag(*, session: Session, tag_in: TagCreate) -> None:
+    """Function to create a tag.
+    
+    :param session: The SQLAlchemy session object.
+    :param tag_in: tag data to create a Tag from.
+    :returns: Tag object.
+    """
+
     db_tag = Tag.model_validate(tag_in)
     session.add(db_tag)
     session.commit()

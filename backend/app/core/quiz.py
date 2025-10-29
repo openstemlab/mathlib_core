@@ -16,6 +16,7 @@ def form_quiz(
     :param session: The database session.
     :return: A QuizPublic object representing the created quiz.
     """
+    
     tag_ids = [tag.id for tag in tags]
     subquery = (
         select(Exercise.id)

@@ -6,6 +6,7 @@ from tests.utils.utils import random_lower_string
 
 
 def create_random_tag(db: Session) -> Tag:
+    """Function to create a randomised Tag."""
     name = random_lower_string()
     description = random_lower_string()
     tag_in = TagCreate(name=name, description=description)

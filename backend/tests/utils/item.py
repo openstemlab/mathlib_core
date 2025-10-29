@@ -7,6 +7,8 @@ from tests.utils.utils import random_lower_string
 
 
 def create_random_item(db: Session) -> Item:
+    """Function to create a randomized Item."""
+    
     user = create_random_user(db)
     owner_id = user.id
     assert owner_id is not None

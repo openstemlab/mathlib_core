@@ -7,13 +7,17 @@ from tests.utils.exercise import create_random_exercise
 
 
 def create_random_quiz(db: Session) -> QuizPublic:
+    """
+    Utitility function that creates a random quiz.
+    :param: db - the database session.
+    :returns: QuizPublic - public representation of the quiz.
+    """
     user = create_random_user(db)
     tag = create_random_tag(db)
-    exercises = []
     for _ in range(5):
         exercise = create_random_exercise(db)
         exercise.tags.append(tag)
         db.add(exercise)
     db.commit()
-    quiz = form_quiz(length=3, tags=[tag], owner_id=user.id, session=db)
+    quiz = form_quiz(length=5, tags=[tag], owner_id=user.id, session=db)
     return quiz

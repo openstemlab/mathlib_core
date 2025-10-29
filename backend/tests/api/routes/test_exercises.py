@@ -12,6 +12,8 @@ from tests.utils.tags import create_random_tag
 def test_create_exercise(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
+    """Checks if exercise is created properly."""
+
     data = {
         "source_name": "SourceA",
         "source_id": "001",
@@ -35,6 +37,8 @@ def test_create_exercise(
 def create_exercise_not_enough_permissions(
     client: TestClient, normal_user_token_headers: dict[str, str]
 ) -> None:
+    """Checks that exercise cant be created by normal user."""
+
     data = {
         "source_name": "SourceA",
         "source_id": "001",
@@ -54,6 +58,8 @@ def create_exercise_not_enough_permissions(
 def test_read_exercise(
     client: TestClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
+    """Checks if exercise is read properly."""
+
     exercise = create_random_exercise(db)
     tag = create_random_tag(db)
 
@@ -81,6 +87,8 @@ def test_read_exercise(
 def test_read_exercise_not_found(
     client: TestClient, normal_user_token_headers: dict[str, str]
 ) -> None:
+    """Checks that nonexistant exercise returns 404."""
+
     response = client.get(
         f"{settings.API_V1_STR}/exercises/{uuid.uuid4()}",
         headers=normal_user_token_headers,
@@ -93,6 +101,8 @@ def test_read_exercise_not_found(
 def test_read_exercises(
     client: TestClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
+    """Checks if list of exercises is returned properly."""
+
     create_random_exercise(db)
     create_random_exercise(db)
     response = client.get(
@@ -107,6 +117,8 @@ def test_read_exercises(
 def test_update_exercise(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
+    """Checks if exercise is updated properly."""
+
     exercise = create_random_exercise(db)
     tag1 = create_random_tag(db)
     tag2 = create_random_tag(db)
@@ -141,6 +153,8 @@ def test_update_exercise(
 def test_update_exercise_not_found(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
+    """Checks that nonexistent exercise cant be updated and returns 404."""
+
     tag1 = create_random_tag(db)
     tag2 = create_random_tag(db)
     tags = [
@@ -167,6 +181,8 @@ def test_update_exercise_not_found(
 def test_update_exercise_not_enough_permissions(
     client: TestClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
+    """Checks that normal users cant change exercises."""
+
     exercise = create_random_exercise(db)
     tag1 = create_random_tag(db)
 
@@ -195,6 +211,8 @@ def test_update_exercise_not_enough_permissions(
 def test_delete_exercise(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
+    """Checks that exercises can be deleted properly."""
+
     exercise = create_random_exercise(db)
     response = client.delete(
         f"{settings.API_V1_STR}/exercises/{exercise.id}",
@@ -208,6 +226,8 @@ def test_delete_exercise(
 def test_delete_exercise_not_found(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
+    """Checks that nonexistent exercise cant be deleted."""
+
     response = client.delete(
         f"{settings.API_V1_STR}/exercises/{uuid.uuid4()}",
         headers=superuser_token_headers,
@@ -220,6 +240,8 @@ def test_delete_exercise_not_found(
 def test_delete_exercise_not_enough_permissions(
     client: TestClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
+    """Checks that normal users cant delete exercises."""
+    
     exercise = create_random_exercise(db)
     response = client.delete(
         f"{settings.API_V1_STR}/exercises/{exercise.id}",

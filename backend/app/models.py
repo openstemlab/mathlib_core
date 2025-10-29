@@ -9,6 +9,15 @@ from sqlalchemy import JSON
 
 # Shared properties
 class UserBase(SQLModel):
+    """Base model for user entities containing common attributes.
+
+    Attributes:
+        email: Unique email address with maximum length 255 characters.
+        is_active: Boolean indicating user account status.
+        is_superuser: Boolean indicating administrative privileges.
+        full_name: Optional full name of the user with maximum length 255.
+    """
+
     email: EmailStr = Field(unique=True, index=True, max_length=255)
     is_active: bool = True
     is_superuser: bool = False
@@ -17,10 +26,28 @@ class UserBase(SQLModel):
 
 # Properties to receive via API on creation
 class UserCreate(UserBase):
+    """Model for user creation via API endpoints. Inherits from UserBase.
+
+    Attributes:
+        email: Unique email address with maximum length 255 characters.
+        is_active: Boolean indicating user account status.
+        is_superuser: Boolean indicating administrative privileges.
+        full_name: Optional full name of the user with maximum length 255.
+        password: Required password with validation constraints.
+    """
+
     password: str = Field(min_length=8, max_length=40)
 
 
 class UserRegister(SQLModel):
+    """Model for user registration requests.
+
+    Attributes:
+        email: Unique email address with maximum length 255 characters.
+        password: Required password with validation constraints.
+        full_name: Optional full name of the user with maximum length 255.
+    """
+
     email: EmailStr = Field(max_length=255)
     password: str = Field(min_length=8, max_length=40)
     full_name: str | None = Field(default=None, max_length=255)
@@ -28,22 +55,52 @@ class UserRegister(SQLModel):
 
 # Properties to receive via API on update, all are optional
 class UserUpdate(UserBase):
+    """Model for user updates via API endpoints. Inherits from UserBase.
+
+    Attributes:
+        email: Optional, unique email address with maximum length 255 characters.
+        password: Optional password with validation constraints.
+    """
+
     email: EmailStr | None = Field(default=None, max_length=255)  # type: ignore
     password: str | None = Field(default=None, min_length=8, max_length=40)
 
 
 class UserUpdateMe(SQLModel):
+    """Model for self-updating user profile information.
+    
+    Attributes:
+        full_name: Optional full name of the user with maximum length 255.
+        email: Optional email address with maximum length 255.
+    """
+
     full_name: str | None = Field(default=None, max_length=255)
     email: EmailStr | None = Field(default=None, max_length=255)
 
 
 class UpdatePassword(SQLModel):
+    """Model for password update requests.
+    
+    Attributes:
+        current_password: Required current password.
+        new_password: Required new password.
+    """
+
     current_password: str = Field(min_length=8, max_length=40)
     new_password: str = Field(min_length=8, max_length=40)
 
 
 # Database model, database table inferred from class name
 class User(UserBase, table=True):
+    """Database representation of a user entity. Inherits from UserBase.
+    
+    Attributes:
+        id: Unique identifier for the user.
+        hashed_password: Hashed password for secure storage.
+        items: List of items associated with the user.
+        quizzes: List of quizzes associated with the user.
+    """
+
     id: str = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
     items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
@@ -52,32 +109,67 @@ class User(UserBase, table=True):
 
 # Properties to return via API, id is always required
 class UserPublic(UserBase):
+    """Public user data model for API responses. Inherits from UserBase.
+
+    Attributes:
+        id: Unique identifier for the user.
+    """
+
     id: str
 
 
 class UsersPublic(SQLModel):
+    """Public model for user list responses.
+
+    Attributes:
+        data: List of UserPublic objects.
+        count: Total number of users.
+    """
     data: list[UserPublic]
     count: int
 
 
 # Shared properties
 class ItemBase(SQLModel):
+    """Base model for items.
+    
+    Attributes:
+        title: Required title with maximum length 255.
+        description: Optional description with maximum length 255.
+    """
     title: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=255)
 
 
 # Properties to receive on item creation
 class ItemCreate(ItemBase):
+    """Model for item creation via API endpoints. Inherits from ItemBase.
+    """
+
     pass
 
 
 # Properties to receive on item update
 class ItemUpdate(ItemBase):
+    """Model for item updates via API endpoints. Inherits from ItemBase.
+    
+    Attributes:
+        title: Optional title with maximum length 255.
+    """
+
     title: str | None = Field(default=None, min_length=1, max_length=255)  # type: ignore
 
 
 # Database model, database table inferred from class name
 class Item(ItemBase, table=True):
+    """Database representation of an item entity. Inherits from ItemBase.
+
+    Attributes:
+        id: Unique identifier for the item.
+        owner_id: Foreign key to the owner's user ID.
+        owner: Optional relationship to the owner's user.
+    """
+
     id: str = Field(default_factory=uuid.uuid4, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
     owner: User | None = Relationship(back_populates="items")
@@ -85,42 +177,95 @@ class Item(ItemBase, table=True):
 
 # Properties to return via API, id is always required
 class ItemPublic(ItemBase):
+    """Public representation of an item for API responses. Inherits from ItemBase.
+
+    Attributes:
+        id: Unique identifier for the item.
+        owner_id: Foreign key to the owner's user ID.
+    """
+
     id: str
     owner_id: str
 
 
 class ItemsPublic(SQLModel):
+    """Public representation of a list of items for API responses.
+
+    Attributes:
+        data: List of ItemPublic objects.
+        count: Total number of items.
+    """
+
     data: list[ItemPublic]
     count: int
 
 
 # Generic message
 class Message(SQLModel):
+    """Model for messages.
+
+    Attributes:
+        message: Required message string.
+    """
+
     message: str
 
 
 # JSON payload containing access token
 class Token(SQLModel):
+    """Access token model.
+    
+    Attributes:
+        access_token: Required access token string.
+        token_type: Optional token type string, defaults to 'bearer'.
+    """
+
     access_token: str
     token_type: str = "bearer"
 
 
 # Contents of JWT token
 class TokenPayload(SQLModel):
+    """JWT token payload validation model.
+    
+    Attributes:
+        sub: Optional User identifier.
+    """
     sub: str | None = None
 
 
 class NewPassword(SQLModel):
+    """Validation model for a new password.
+    
+    Attributes:
+        token: Authentication token.
+        new_password: New password.
+    """
+
     token: str
     new_password: str = Field(min_length=8, max_length=40)
 
 
 class ExerciseTag(SQLModel, table=True):
+    """Model for M2M link between exercises and tags.
+
+    Attributes:
+        exercise_id: Foreign key to the exercise ID.
+        tag_id: Foreign key to the tag ID.
+    """
+
     exercise_id: str = Field(default=None, foreign_key="exercise.id", primary_key=True)
     tag_id: str = Field(default=None, foreign_key="tag.id", primary_key=True)
 
 
 class QuizExercise(SQLModel, table=True):
+    """Model for M2M link between quizzes and exercises.
+    
+    Attributes:
+        quiz_id: Foreign key to the quiz ID.
+        exercise_id: Foreign key to the exercise ID.
+    """
+
     quiz_id: str = Field(
         foreign_key="quiz.id",
         primary_key=True,
@@ -134,8 +279,16 @@ class QuizExercise(SQLModel, table=True):
 
 
 class ExerciseBase(SQLModel):
-    """
-    Base model for an exercise.
+    """Base model for an exercise.
+
+    Attributes:
+        source_name: Source of an excercise.
+        source_id: id of an exercise in a given source.
+        text: Text of an exercise.
+        solution: correct answer to the exercise
+        false_answers: list of false answers to the exercise to put in a quiz
+        formula: formula for the exercise, if given
+        illustration: illustration for the exercise, if given
     """
 
     source_name: str = Field(max_length=255)
@@ -160,18 +313,33 @@ class ExerciseCreate(ExerciseBase):
 
 
 class ExerciseUpdate(ExerciseBase):
+    """Model for updating an existing exercise via API endpoint.
+    
+    Attributes:
+        source_name: Optional. Source of an excercise.
+        source_id: Optional. ID of an exercise in a given source.
+        text: Optional. Text of an exercise.
+        solution: Optional. Correct answer to the exercise
+        formula: Optional. Formula for the exercise, if given
+        illustration: Optional. Illustration for the exercise, if given
+        tags: Optional. List of Tag objects, representing tags for the exercise
+    """
     source_name: str | None = Field(default=None, max_length=255)
     source_id: str | None = Field(default=None, max_length=255)
     text: str | None = None
     solution: str | None = None
     formula: str | None = None
     illustration: str | None = None
-    tags: list[dict] | None = None
+    tags: list["Tag"] | None = None
 
 
 class Exercise(ExerciseBase, table=True):
-    """
-    Database model for an exercise.
+    """Database model for an exercise. Inherits from ExerciseBase.
+
+    Attributes:
+        id: Unique identifier for the exercise.
+        tags: list of Tag objects representing tags for the exercise
+        quizzes: list of Quiz objects representing quizzes that include the exercise
     """
 
     id: str = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -182,31 +350,70 @@ class Exercise(ExerciseBase, table=True):
 
 
 class ExercisePublic(ExerciseBase):
+    """Public representation of Exercise for API responses. Inherits from ExerciseBase.
+
+    Attributes:
+        id: Unique identifier for the exercise.
+        tags: list of Tag objects representing tags for the exercise
+    """
+
     id: str
     tags: list["TagPublic"] = []
 
 
 class ExercisesPublic(SQLModel):
+    """Public representation for a list of Exercises.
+
+    Attributes:
+        data: list of ExercisePublic objects
+        count: total number of exercises
+    """
+
     data: list[ExercisePublic]
     count: int
 
 
 class TagBase(SQLModel):
+    """Base model for a tag.
+
+    Attributes:
+        name: Name of the tag.
+        description: Optional description of the tag.
+    """
+
     name: str = Field(unique=True, index=True, max_length=255)
     description: Optional[str] = None
 
 
 class TagCreate(TagBase):
+    """Model for creating a new tag via API endpoints.    
+    """
+
     pass
 
 
 class TagUpdate(TagBase):
+    """Model for updating tag via API endpoints. Inherits from TagBase
+
+    Attributes:
+        name: Optional. Name of the tag.
+        description: Optional. Description of the tag.
+        exercises: Optional. List of Exercise objects, representing exercises associated with the tag.
+    """
+
     name: str | None = Field(default=None, max_length=255)
     description: Optional[str] = None
     exercises: list["Exercise"] | None = None
 
 
 class Tag(TagBase, table=True):
+    """Database model for a tag. Inherits from TagBase.
+
+    Attributes:
+        id: Unique identifier for the tag.
+        exercises: list of Exercise objects representing exercises associated with the tag
+    """
+
     id: str = Field(default_factory=uuid.uuid4, primary_key=True)
     exercises: list[Exercise] = Relationship(
         back_populates="tags", link_model=ExerciseTag
@@ -214,27 +421,67 @@ class Tag(TagBase, table=True):
 
 
 class TagPublic(TagBase):
+    """Public representation of a Tag for API responses. Inherits from TagBase.
+    
+    Attributes:
+        id: Unique identifier for the tag.
+    """
+
     id: str
 
 
 class TagsPublic(SQLModel):
+    """Public representation for a list of Tags.
+
+    Attributes:
+        data: list of TagPublic objects
+        count: total number of tags
+    """
+
     data: list[TagPublic]
     count: int
 
 
 class QuizBase(SQLModel):
+    """Base model for a quiz.
+
+    Attributes:
+        is_active: Optional flag indicating whether the quiz is active. False by default.
+    """
+
     is_active: bool = False
 
 
 class QuizCreate(QuizBase):
+    """Model for creating a new quiz via API endpoints.
+
+    Attributes:
+        is_active: Flag indicating whether the quiz is active.
+    """
+
     pass
 
 
 class QuizUpdate(QuizBase):
+    """Model for updating a quiz via API endpoints. Inherits from QuizBase.
+    
+    Atributes:
+        is_active: Optional. Flag indicating whether the quiz is active.
+    """
+
     is_active: bool | None = None
 
 
 class Quiz(QuizBase, table=True):
+    """Database model for a Quiz. Inherits from QuizBase.
+
+    Attributes:
+        id: Unique identifier for the quiz.
+        owner_id: Unique identifier for the user who created the quiz.
+        owner: User object representing the owner of the quiz
+        exercises: list of Exercise objects representing exercises included in the quiz
+    """
+
     id: str = Field(default_factory=uuid.uuid4, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
     owner: User | None = Relationship(back_populates="quizzes")
@@ -244,11 +491,26 @@ class Quiz(QuizBase, table=True):
 
 
 class QuizPublic(QuizBase):
+    """Public representation of a Quiz. Inherits for QuizBase.
+
+    Attributes:
+        id: Unique identifier for the quiz.
+        owner_id: Unique identifier for the user who created the quiz.
+        exercises: list of Exercise objects representing exercises included in the quiz
+    """
+
     id: str
     owner_id: str
     exercises: list[ExercisePublic]
 
 
 class QuizzesPublic(SQLModel):
+    """Public representation for a list of Quizzes.
+    
+    Attributes:
+        data: list of QuizPublic objects
+        count: total number of quizzes
+    """
+    
     data: list[QuizPublic]
     count: int
