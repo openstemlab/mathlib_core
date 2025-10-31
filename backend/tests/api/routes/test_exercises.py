@@ -1,12 +1,11 @@
-import uuid
+from uuid_extensions import uuid7str
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.core.config import settings
-from app.models import ExerciseTag
 from tests.utils.exercise import create_random_exercise
-from tests.utils.tags import create_random_tag
+from tests.utils.utils import random_lower_string
 
 
 def test_create_exercise(
@@ -61,17 +60,12 @@ def test_read_exercise(
     """Checks if exercise is read properly."""
 
     exercise = create_random_exercise(db)
-    tag = create_random_tag(db)
-
-    exercise_tag = ExerciseTag(exercise_id=exercise.id, tag_id=tag.id)
-    db.add(exercise_tag)
-    db.commit()
-    db.refresh(exercise)
 
     response = client.get(
         f"{settings.API_V1_STR}/exercises/{exercise.id}",
         headers=normal_user_token_headers,
     )
+
     assert response.status_code == 200
     content = response.json()
     assert content["source_name"] == exercise.source_name
@@ -80,8 +74,7 @@ def test_read_exercise(
     assert content["solution"] == exercise.solution
     assert content["id"] == str(exercise.id)
     assert len(content["tags"]) > 0
-    assert content["tags"][0]["id"] == str(tag.id)
-    assert content["tags"][0]["name"] == tag.name
+    assert content["tags"] == exercise.tags
 
 
 def test_read_exercise_not_found(
@@ -90,7 +83,7 @@ def test_read_exercise_not_found(
     """Checks that nonexistant exercise returns 404."""
 
     response = client.get(
-        f"{settings.API_V1_STR}/exercises/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/exercises/{uuid7str()}",
         headers=normal_user_token_headers,
     )
     assert response.status_code == 404
@@ -120,12 +113,11 @@ def test_update_exercise(
     """Checks if exercise is updated properly."""
 
     exercise = create_random_exercise(db)
-    tag1 = create_random_tag(db)
-    tag2 = create_random_tag(db)
+
 
     tags = [
-        {"id": tag1.id, "name": tag1.name, "description": tag1.description},
-        {"id": tag2.id, "name": tag2.name, "description": tag2.description},
+        random_lower_string(),
+        random_lower_string(),
     ]
     data = {
         "source_name": "UpdatedSource",
@@ -146,8 +138,9 @@ def test_update_exercise(
     assert content["text"] == data["text"]
     assert content["solution"] == data["solution"]
     assert content["id"] == str(exercise.id)
+    assert isinstance(content["tags"], list)
     assert content["tags"] == data["tags"]
-    assert len(content["tags"]) >= 2
+
 
 
 def test_update_exercise_not_found(
@@ -155,11 +148,9 @@ def test_update_exercise_not_found(
 ) -> None:
     """Checks that nonexistent exercise cant be updated and returns 404."""
 
-    tag1 = create_random_tag(db)
-    tag2 = create_random_tag(db)
     tags = [
-        {"id": tag1.id, "name": tag1.name, "description": tag1.description},
-        {"id": tag2.id, "name": tag2.name, "description": tag2.description},
+        random_lower_string(),
+        random_lower_string(),
     ]
     data = {
         "source_name": "UpdatedSource",
@@ -169,7 +160,7 @@ def test_update_exercise_not_found(
         "tags": tags,
     }
     response = client.put(
-        f"{settings.API_V1_STR}/exercises/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/exercises/{uuid7str()}",
         headers=superuser_token_headers,
         json=data,
     )
@@ -184,12 +175,9 @@ def test_update_exercise_not_enough_permissions(
     """Checks that normal users cant change exercises."""
 
     exercise = create_random_exercise(db)
-    tag1 = create_random_tag(db)
-
-    tag2 = create_random_tag(db)
     tags = [
-        {"id": tag1.id, "name": tag1.name, "description": tag1.description},
-        {"id": tag2.id, "name": tag2.name, "description": tag2.description},
+        random_lower_string(),
+        random_lower_string(),
     ]
     data = {
         "source_name": "UpdatedSource",
@@ -229,7 +217,7 @@ def test_delete_exercise_not_found(
     """Checks that nonexistent exercise cant be deleted."""
 
     response = client.delete(
-        f"{settings.API_V1_STR}/exercises/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/exercises/{uuid7str()}",
         headers=superuser_token_headers,
     )
     assert response.status_code == 404

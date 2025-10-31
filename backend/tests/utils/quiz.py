@@ -1,9 +1,10 @@
 from sqlmodel import Session
 from app.core.quiz import form_quiz
-from app.models import Exercise, Quiz, QuizPublic
+from app.models import QuizPublic
 from tests.utils.user import create_random_user
-from tests.utils.tags import create_random_tag
+
 from tests.utils.exercise import create_random_exercise
+from tests.utils.utils import random_lower_string
 
 
 def create_random_quiz(db: Session) -> QuizPublic:
@@ -13,11 +14,12 @@ def create_random_quiz(db: Session) -> QuizPublic:
     :returns: QuizPublic - public representation of the quiz.
     """
     user = create_random_user(db)
-    tag = create_random_tag(db)
+    tag = random_lower_string()
+    title = random_lower_string()
     for _ in range(5):
         exercise = create_random_exercise(db)
         exercise.tags.append(tag)
         db.add(exercise)
     db.commit()
-    quiz = form_quiz(length=5, tags=[tag], owner_id=user.id, session=db)
+    quiz = form_quiz(length=5, tags=[tag], owner_id=user.id, title=title, session=db)
     return quiz

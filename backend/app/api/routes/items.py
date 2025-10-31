@@ -1,4 +1,4 @@
-import uuid
+from uuid_extensions import uuid7str
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -42,7 +42,7 @@ def read_items(
 
 
 @router.get("/{id}", response_model=ItemPublic)
-def read_item(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> Any:
+def read_item(session: SessionDep, current_user: CurrentUser, id: str) -> Any:
     """
     Get item by ID.
     """
@@ -73,7 +73,7 @@ def update_item(
     *,
     session: SessionDep,
     current_user: CurrentUser,
-    id: uuid.UUID,
+    id: str,
     item_in: ItemUpdate,
 ) -> Any:
     """
@@ -94,7 +94,7 @@ def update_item(
 
 @router.delete("/{id}")
 def delete_item(
-    session: SessionDep, current_user: CurrentUser, id: uuid.UUID
+    session: SessionDep, current_user: CurrentUser, id: str
 ) -> Message:
     """
     Delete an item.

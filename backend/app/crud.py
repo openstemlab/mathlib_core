@@ -1,4 +1,4 @@
-import uuid
+from uuid_extensions import uuid7str
 from typing import Any
 
 from sqlmodel import Session, select
@@ -12,8 +12,6 @@ from app.models import (
     UserUpdate,
     Exercise,
     ExerciseCreate,
-    Tag,
-    TagCreate,
 )
 
 
@@ -86,7 +84,7 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
     return db_user
 
 
-def create_item(*, session: Session, item_in: ItemCreate, owner_id: uuid.UUID) -> Item:
+def create_item(*, session: Session, item_in: ItemCreate, owner_id: str) -> Item:
     """Function to create an item.
     
     :param session: The SQLAlchemy session object.
@@ -117,16 +115,3 @@ def create_exercise(*, session: Session, exercise_in: ExerciseCreate) -> Exercis
     return db_exercise
 
 
-def create_tag(*, session: Session, tag_in: TagCreate) -> None:
-    """Function to create a tag.
-    
-    :param session: The SQLAlchemy session object.
-    :param tag_in: tag data to create a Tag from.
-    :returns: Tag object.
-    """
-
-    db_tag = Tag.model_validate(tag_in)
-    session.add(db_tag)
-    session.commit()
-    session.refresh(db_tag)
-    return db_tag

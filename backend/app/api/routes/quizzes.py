@@ -2,7 +2,7 @@
 Quizzes only accessable by the owner
 """
 
-import uuid
+from uuid_extensions import uuid7str
 from typing import Any
 
 from fastapi import APIRouter, HTTPException

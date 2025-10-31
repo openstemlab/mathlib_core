@@ -1,10 +1,10 @@
-import uuid
+from uuid_extensions import uuid7str
 import json
-from typing import Optional
 
 from pydantic import EmailStr, field_validator
 from sqlmodel import Field, Relationship, SQLModel
-from sqlalchemy import JSON
+from sqlalchemy import Column
+from sqlalchemy.dialects.postgresql import JSONB
 
 
 # Shared properties
@@ -101,7 +101,7 @@ class User(UserBase, table=True):
         quizzes: List of quizzes associated with the user.
     """
 
-    id: str = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: str = Field(default_factory=uuid7str, primary_key=True)
     hashed_password: str
     items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
     quizzes: list["Quiz"] = Relationship(back_populates="owner", cascade_delete=True)
@@ -170,7 +170,7 @@ class Item(ItemBase, table=True):
         owner: Optional relationship to the owner's user.
     """
 
-    id: str = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: str = Field(default_factory=uuid7str, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
     owner: User | None = Relationship(back_populates="items")
 
@@ -246,17 +246,6 @@ class NewPassword(SQLModel):
     new_password: str = Field(min_length=8, max_length=40)
 
 
-class ExerciseTag(SQLModel, table=True):
-    """Model for M2M link between exercises and tags.
-
-    Attributes:
-        exercise_id: Foreign key to the exercise ID.
-        tag_id: Foreign key to the tag ID.
-    """
-
-    exercise_id: str = Field(default=None, foreign_key="exercise.id", primary_key=True)
-    tag_id: str = Field(default=None, foreign_key="tag.id", primary_key=True)
-
 
 class QuizExercise(SQLModel, table=True):
     """Model for M2M link between quizzes and exercises.
@@ -276,6 +265,8 @@ class QuizExercise(SQLModel, table=True):
         primary_key=True,
         ondelete="CASCADE",
     )
+    position: int = 0
+    is_solved: bool = False
 
 
 class ExerciseBase(SQLModel):
@@ -295,13 +286,9 @@ class ExerciseBase(SQLModel):
     source_id: str = Field(max_length=255)
     text: str
     solution: str
-    false_answers: list[str] = Field(
-        sa_type=JSON,
-        default_factory=list,
-        schema_extra={"type": "array", "items": {"type": "string"}},
-    )
-    formula: str | None = None
-    illustration: str | None = None
+    answers: list[str] = Field(default_factory=list)
+    illustration: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
 
 class ExerciseCreate(ExerciseBase):
@@ -328,9 +315,8 @@ class ExerciseUpdate(ExerciseBase):
     source_id: str | None = Field(default=None, max_length=255)
     text: str | None = None
     solution: str | None = None
-    formula: str | None = None
-    illustration: str | None = None
-    tags: list["Tag"] | None = None
+    illustration: list[str] | None = None
+    tags: list[str] | None = None
 
 
 class Exercise(ExerciseBase, table=True):
@@ -342,8 +328,19 @@ class Exercise(ExerciseBase, table=True):
         quizzes: list of Quiz objects representing quizzes that include the exercise
     """
 
-    id: str = Field(default_factory=uuid.uuid4, primary_key=True)
-    tags: list["Tag"] = Relationship(back_populates="exercises", link_model=ExerciseTag)
+    id: str = Field(default_factory=uuid7str, primary_key=True)
+    answers: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB)
+    )
+    illustration: list[str] | None = Field(
+        default_factory=list,
+        sa_column=Column(JSONB)
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB)
+    )
     quizzes: list["Quiz"] = Relationship(
         back_populates="exercises", link_model=QuizExercise
     )
@@ -358,7 +355,9 @@ class ExercisePublic(ExerciseBase):
     """
 
     id: str
-    tags: list["TagPublic"] = []
+    illustration: list[str] = []
+    answers: list[str] = []
+    tags: list[str] = []
 
 
 class ExercisesPublic(SQLModel):
@@ -373,75 +372,6 @@ class ExercisesPublic(SQLModel):
     count: int
 
 
-class TagBase(SQLModel):
-    """Base model for a tag.
-
-    Attributes:
-        name: Name of the tag.
-        description: Optional description of the tag.
-    """
-
-    name: str = Field(unique=True, index=True, max_length=255)
-    description: Optional[str] = None
-
-
-class TagCreate(TagBase):
-    """Model for creating a new tag via API endpoints.    
-    """
-
-    pass
-
-
-class TagUpdate(TagBase):
-    """Model for updating tag via API endpoints. Inherits from TagBase
-
-    Attributes:
-        name: Optional. Name of the tag.
-        description: Optional. Description of the tag.
-        exercises: Optional. List of Exercise objects, representing exercises associated with the tag.
-    """
-
-    name: str | None = Field(default=None, max_length=255)
-    description: Optional[str] = None
-    exercises: list["Exercise"] | None = None
-
-
-class Tag(TagBase, table=True):
-    """Database model for a tag. Inherits from TagBase.
-
-    Attributes:
-        id: Unique identifier for the tag.
-        exercises: list of Exercise objects representing exercises associated with the tag
-    """
-
-    id: str = Field(default_factory=uuid.uuid4, primary_key=True)
-    exercises: list[Exercise] = Relationship(
-        back_populates="tags", link_model=ExerciseTag
-    )
-
-
-class TagPublic(TagBase):
-    """Public representation of a Tag for API responses. Inherits from TagBase.
-    
-    Attributes:
-        id: Unique identifier for the tag.
-    """
-
-    id: str
-
-
-class TagsPublic(SQLModel):
-    """Public representation for a list of Tags.
-
-    Attributes:
-        data: list of TagPublic objects
-        count: total number of tags
-    """
-
-    data: list[TagPublic]
-    count: int
-
-
 class QuizBase(SQLModel):
     """Base model for a quiz.
 
@@ -450,6 +380,7 @@ class QuizBase(SQLModel):
     """
 
     is_active: bool = False
+    title: str|None = Field(default=None, max_length=255)
 
 
 class QuizCreate(QuizBase):
@@ -458,7 +389,10 @@ class QuizCreate(QuizBase):
     Attributes:
         is_active: Flag indicating whether the quiz is active.
     """
-
+    exercise_positions: list[tuple[str, int]] = Field(
+        default_factory=list,
+        description="List of tuples containing (exercise_id, position)"
+    )
     pass
 
 
@@ -470,6 +404,11 @@ class QuizUpdate(QuizBase):
     """
 
     is_active: bool | None = None
+    title: str | None = Field(default=None, max_length=255)
+    exercise_positions: list[tuple[str, int]]|None = Field(
+        default_factory=list,
+        description="List of tuples containing (exercise_id, position)"
+    )
 
 
 class Quiz(QuizBase, table=True):
@@ -482,7 +421,7 @@ class Quiz(QuizBase, table=True):
         exercises: list of Exercise objects representing exercises included in the quiz
     """
 
-    id: str = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: str = Field(default_factory=uuid7str, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
     owner: User | None = Relationship(back_populates="quizzes")
     exercises: list["Exercise"] = Relationship(
@@ -501,7 +440,7 @@ class QuizPublic(QuizBase):
 
     id: str
     owner_id: str
-    exercises: list[ExercisePublic]
+    exercises: list[tuple[ExercisePublic, int]]
 
 
 class QuizzesPublic(SQLModel):

@@ -1,7 +1,7 @@
 """
 Tests for testing tests.
 """
-import uuid
+from uuid_extensions import uuid7str
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from tests.utils.user import create_random_user, user_authentication_headers
 from tests.utils.quiz import create_random_quiz
+from tests.utils.exercise import create_random_exercise
 from app.models import QuizCreate, User
 
 
@@ -23,8 +24,9 @@ def test_create_quiz(client: TestClient, db: Session) -> None:
     headers = user_authentication_headers(
         client=client, email=user.email, password="testpass"
     )
-
-    quiz_in = QuizCreate(is_active=False)
+    exercises = [create_random_exercise(db) for _ in range(3)]
+    exercise_positions = [(ex.id, i) for i, ex in enumerate(exercises)]
+    quiz_in = QuizCreate(is_active=False, exercise_positions=exercise_positions,)
 
     response = client.post(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/",
@@ -104,7 +106,7 @@ def test_read_quizzes_no_permission(
     headers = user_authentication_headers(
         client=client, email=user.email, password="testpass"
     )
-    random_user_id = str(uuid.uuid4())
+    random_user_id = str(uuid7str())
 
     response = client.get(
         f"{settings.API_V1_STR}/users/{random_user_id}/quizzes/",
@@ -170,7 +172,7 @@ def test_read_quiz_not_found(
         email=user.email,
         password="testpass",
     )
-    fake_id = str(uuid.uuid4)
+    fake_id = str(uuid7str)
 
     response = client.get(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/{fake_id}/",
@@ -255,7 +257,7 @@ def test_update_quiz_not_found(client: TestClient, db: Session) -> None:
     quiz.is_active = False
 
     update_data = {"is_active": True}
-    fake_id = str(uuid.uuid4())
+    fake_id = str(uuid7str())
     response = client.put(
         f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{fake_id}/",
         headers=headers,
@@ -333,7 +335,7 @@ def test_delete_not_found(client: TestClient, db: Session) -> None:
         password="testpass",
     )
 
-    fake_id = str(uuid.uuid4())
+    fake_id = str(uuid7str())
 
     response = client.delete(
         f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{fake_id}/",

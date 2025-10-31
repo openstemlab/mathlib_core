@@ -1,4 +1,4 @@
-import uuid
+from uuid_extensions import uuid7str
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -106,7 +106,7 @@ def test_get_existing_user_permissions_error(
     client: TestClient, normal_user_token_headers: dict[str, str]
 ) -> None:
     r = client.get(
-        f"{settings.API_V1_STR}/users/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/users/{uuid7str()}",
         headers=normal_user_token_headers,
     )
     assert r.status_code == 403
@@ -351,7 +351,7 @@ def test_update_user_not_exists(
 ) -> None:
     data = {"full_name": "Updated_full_name"}
     r = client.patch(
-        f"{settings.API_V1_STR}/users/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/users/{uuid7str()}",
         headers=superuser_token_headers,
         json=data,
     )
@@ -448,7 +448,7 @@ def test_delete_user_not_found(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
     r = client.delete(
-        f"{settings.API_V1_STR}/users/{uuid.uuid4()}",
+        f"{settings.API_V1_STR}/users/{uuid7str()}",
         headers=superuser_token_headers,
     )
     assert r.status_code == 404
