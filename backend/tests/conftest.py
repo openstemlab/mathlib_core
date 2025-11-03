@@ -1,42 +1,40 @@
-from collections.abc import Generator
+from collections.abc import Generator, AsyncGenerator
 
 import pytest
-from fastapi.testclient import TestClient
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
 from sqlmodel import Session, delete
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
-from app.core.db import engine, init_db
+from app.core.db import async_engine, init_db
 from app.main import app
 from app.models import Item, User
 from tests.utils.user import authentication_token_from_email
 from tests.utils.utils import get_superuser_token_headers
 
 
-@pytest.fixture(scope="session", autouse=True)
-def db() -> Generator[Session, None, None]:
-    with Session(engine) as session:
-        init_db(session)
+@pytest_asyncio.fixture(scope="session")
+async def db() -> AsyncGenerator[AsyncSession,None]:
+    async with AsyncSession(async_engine) as session:
         yield session
-        statement = delete(Item)
-        session.execute(statement)
-        statement = delete(User)
-        session.execute(statement)
-        session.commit()
 
 
-@pytest.fixture(scope="module")
-def client() -> Generator[TestClient, None, None]:
-    with TestClient(app) as c:
+
+@pytest_asyncio.fixture(scope="function")
+async def client() -> AsyncGenerator[AsyncClient, None]:
+    async with AsyncClient(transport=ASGITransport(app=app),) as c:
         yield c
 
 
-@pytest.fixture(scope="module")
-def superuser_token_headers(client: TestClient) -> dict[str, str]:
-    return get_superuser_token_headers(client)
+@pytest_asyncio.fixture(scope="function")
+async def superuser_token_headers(client: AsyncClient) -> dict[str, str]:
+    return await get_superuser_token_headers(client)
 
 
-@pytest.fixture(scope="module")
-def normal_user_token_headers(client: TestClient, db: Session) -> dict[str, str]:
-    return authentication_token_from_email(
+@pytest_asyncio.fixture(scope="function")
+async def normal_user_token_headers(client: AsyncClient, db: AsyncSession) -> dict[str, str]:
+    return await authentication_token_from_email(
         client=client, email=settings.EMAIL_TEST_USER, db=db
     )

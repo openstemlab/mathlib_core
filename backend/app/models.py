@@ -101,6 +101,7 @@ class User(UserBase, table=True):
         quizzes: List of quizzes associated with the user.
     """
 
+    __tablename__ = "user"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     hashed_password: str
     items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
@@ -170,6 +171,7 @@ class Item(ItemBase, table=True):
         owner: Optional relationship to the owner's user.
     """
 
+    __tablename__ = "item"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
     owner: User | None = Relationship(back_populates="items")
@@ -255,6 +257,7 @@ class QuizExercise(SQLModel, table=True):
         exercise_id: Foreign key to the exercise ID.
     """
 
+    __tablename__ = "quizexercise"
     quiz_id: str = Field(
         foreign_key="quiz.id",
         primary_key=True,
@@ -328,6 +331,7 @@ class Exercise(ExerciseBase, table=True):
         quizzes: list of Quiz objects representing quizzes that include the exercise
     """
 
+    __tablename__="exercise"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     answers: list[str] = Field(
         default_factory=list,
@@ -421,6 +425,7 @@ class Quiz(QuizBase, table=True):
         exercises: list of Exercise objects representing exercises included in the quiz
     """
 
+    __tablename__="quiz"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
     owner: User | None = Relationship(back_populates="quizzes")

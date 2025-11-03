@@ -1,7 +1,8 @@
 from uuid_extensions import uuid7str
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.security import get_password_hash, verify_password
 from app.models import (
@@ -15,7 +16,7 @@ from app.models import (
 )
 
 
-def create_user(*, session: Session, user_create: UserCreate) -> User:
+async def create_user(*, session: AsyncSession, user_create: UserCreate) -> User:
     """Function to create a user.
     
     :param session: The SQLAlchemy session object.
@@ -27,12 +28,12 @@ def create_user(*, session: Session, user_create: UserCreate) -> User:
         user_create, update={"hashed_password": get_password_hash(user_create.password)}
     )
     session.add(db_obj)
-    session.commit()
-    session.refresh(db_obj)
+    await session.commit()
+    await session.refresh(db_obj)
     return db_obj
 
 
-def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
+async def update_user(*, session: AsyncSession, db_user: User, user_in: UserUpdate) -> Any:
     """Function to update a user.
 
     :param session: The SQLAlchemy session object.
@@ -49,12 +50,12 @@ def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
         extra_data["hashed_password"] = hashed_password
     db_user.sqlmodel_update(user_data, update=extra_data)
     session.add(db_user)
-    session.commit()
-    session.refresh(db_user)
+    await session.commit()
+    await session.refresh(db_user)
     return db_user
 
 
-def get_user_by_email(*, session: Session, email: str) -> User | None:
+async def get_user_by_email(*, session: AsyncSession, email: str) -> User | None:
     """Function to get a User object from database by email.
     
     :param session: The SQLAlchemy session object
@@ -63,11 +64,11 @@ def get_user_by_email(*, session: Session, email: str) -> User | None:
     """
 
     statement = select(User).where(User.email == email)
-    session_user = session.exec(statement).first()
-    return session_user
+    session_user = await session.exec(statement)
+    return session_user.first()
 
 
-def authenticate(*, session: Session, email: str, password: str) -> User | None:
+async def authenticate(*, session: AsyncSession, email: str, password: str) -> User | None:
     """Function to get a user authentificated.
     
     :param session: The SQLAlchemy session object.
@@ -76,7 +77,7 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
     :returns: User object
     """
 
-    db_user = get_user_by_email(session=session, email=email)
+    db_user = await get_user_by_email(session=session, email=email)
     if not db_user:
         return None
     if not verify_password(password, db_user.hashed_password):
@@ -84,7 +85,7 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
     return db_user
 
 
-def create_item(*, session: Session, item_in: ItemCreate, owner_id: str) -> Item:
+async def create_item(*, session: AsyncSession, item_in: ItemCreate, owner_id: str) -> Item:
     """Function to create an item.
     
     :param session: The SQLAlchemy session object.
@@ -95,12 +96,12 @@ def create_item(*, session: Session, item_in: ItemCreate, owner_id: str) -> Item
 
     db_item = Item.model_validate(item_in, update={"owner_id": owner_id})
     session.add(db_item)
-    session.commit()
-    session.refresh(db_item)
+    await session.commit()
+    await session.refresh(db_item)
     return db_item
 
 
-def create_exercise(*, session: Session, exercise_in: ExerciseCreate) -> Exercise:
+async def create_exercise(*, session: AsyncSession, exercise_in: ExerciseCreate) -> Exercise:
     """Function to create an exercise.
 
     :param session: The SQLAlchemy session object.
@@ -110,8 +111,8 @@ def create_exercise(*, session: Session, exercise_in: ExerciseCreate) -> Exercis
     
     db_exercise = Exercise.model_validate(exercise_in)
     session.add(db_exercise)
-    session.commit()
-    session.refresh(db_exercise)
+    await session.commit()
+    await session.refresh(db_exercise)
     return db_exercise
 
 

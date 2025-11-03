@@ -17,14 +17,15 @@ router = APIRouter(prefix="/exercises", tags=["exercises"])
 
 
 @router.get("/", response_model=ExercisesPublic)
-def read_exercises(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
+async def read_exercises(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
     """
     Retrieve exercises.
     """
+
     count_statement = select(func.count()).select_from(Exercise)
-    count = session.exec(count_statement).one()
+    count = (await session.exec(count_statement)).one()
     statement = select(Exercise).offset(skip).limit(limit).order_by(Exercise.id)
-    exercises = session.exec(statement).all()
+    exercises = (await session.exec(statement)).all()
     public_list =[]
     for exercise in exercises:
         exercise_data = ExercisePublic.model_validate(exercise)
@@ -33,38 +34,41 @@ def read_exercises(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
 
 
 @router.get("/{id}", response_model=ExercisePublic)
-def read_exercise(session: SessionDep, id: str) -> Any:
+async def read_exercise(session: SessionDep, id: str) -> Any:
     """
     Get exercise by ID.
     """
-    exercise = session.get(Exercise, id)
+
+    exercise = await session.get(Exercise, id)
     if not exercise:
         raise HTTPException(status_code=404, detail="Exercise not found")
-
 
     response = ExercisePublic.model_validate(exercise)
     return response
 
 
 @router.post("/", response_model=ExercisePublic)
-def create_exercise(
+async def create_exercise(
     *, session: SessionDep, current_user: CurrentUser, exercise_in: ExerciseCreate
 ) -> Any:
     """
     Create a new exercise.
     """
+
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
+    
     exercise = Exercise.model_validate(exercise_in)
     session.add(exercise)
-    session.commit()
-    session.refresh(exercise)
+    await session.commit()
+    await session.refresh(exercise)
+
     response = ExercisePublic.model_validate(exercise)
     return response
 
 
 @router.put("/{id}", response_model=ExercisePublic)
-def update_exercise(
+async def update_exercise(
     *,
     session: SessionDep,
     current_user: CurrentUser,
@@ -74,10 +78,11 @@ def update_exercise(
     """
     Update an existing exercise.
     """
+
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    exercise = session.get(Exercise, id)
+    exercise = await session.get(Exercise, id)
 
     if not exercise:
         raise HTTPException(status_code=404, detail="Exercise not found")
@@ -86,25 +91,28 @@ def update_exercise(
 
     exercise.sqlmodel_update(exercise_data)
     session.add(exercise)
-    session.commit()
-    session.refresh(exercise)
+    await session.commit()
+    await session.refresh(exercise)
 
     response = ExercisePublic.model_validate(exercise)
     return response
 
 
 @router.delete("/{id}")
-def delete_exercise(
+async def delete_exercise(
     *, session: SessionDep, current_user: CurrentUser, id: str
 ) -> Message:
     """
     Delete an exercise.
     """
+
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
-    exercise = session.get(Exercise, id)
+    exercise = await session.get(Exercise, id)
     if not exercise:
         raise HTTPException(status_code=404, detail="Exercise not found")
-    session.delete(exercise)
-    session.commit()
+    
+    await session.delete(exercise)
+    await session.commit()
+
     return Message(message="Exercise deleted successfully")
