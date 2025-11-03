@@ -3,8 +3,9 @@ Tests for testing tests.
 """
 from uuid_extensions import uuid7str
 
-from fastapi.testclient import TestClient
-from sqlmodel import Session, select
+from httpx import AsyncClient
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
 from tests.utils.user import create_random_user, user_authentication_headers
@@ -13,14 +14,14 @@ from tests.utils.exercise import create_random_exercise
 from app.models import QuizCreate, User
 
 
-def test_create_quiz(client: TestClient, db: Session) -> None:
+async def test_create_quiz(client: AsyncClient, db: AsyncSession) -> None:
     """
     Test quiz creation for an authenticated user.
 
     Verifies that a user can create a quiz with specified parameters and that
     the response contains the correct owner ID, quiz status, and empty exercises list.
     """
-    user = create_random_user(db)
+    user = await create_random_user(db)
     headers = user_authentication_headers(
         client=client, email=user.email, password="testpass"
     )
@@ -28,7 +29,7 @@ def test_create_quiz(client: TestClient, db: Session) -> None:
     exercise_positions = [(ex.id, i) for i, ex in enumerate(exercises)]
     quiz_in = QuizCreate(is_active=False, exercise_positions=exercise_positions,)
 
-    response = client.post(
+    response = await client.post(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/",
         headers=headers,
         json=quiz_in.model_dump(),
@@ -41,9 +42,9 @@ def test_create_quiz(client: TestClient, db: Session) -> None:
     assert len(content["exercises"]) == 0
 
 
-def test_create_quiz_for_other_user(
-    client: TestClient,
-    db: Session,
+async def test_create_quiz_for_other_user(
+    client: AsyncClient,
+    db: AsyncSession,
 ) -> None:
     """
     Test quiz creation for unauthorized user access.
@@ -51,13 +52,13 @@ def test_create_quiz_for_other_user(
     Ensures that a user cannot create a quiz for another user and receives
     a 403 Forbidden response with appropriate error message.
     """
-    user1 = create_random_user(db)
+    user1 = await create_random_user(db)
     headers = user_authentication_headers(
         client=client, email=user1.email, password="testpass"
     )
-    user2 = create_random_user(db)
+    user2 = await create_random_user(db)
     quiz_in = QuizCreate(is_active=False)
-    response = client.post(
+    response = await client.post(
         f"{settings.API_V1_STR}/users/{user2.id}/quizzes/",
         headers=headers,
         json=quiz_in.model_dump(),
@@ -67,9 +68,9 @@ def test_create_quiz_for_other_user(
     assert content["detail"]=="You cant save a quiz for someone else."
 
 
-def test_read_quizzes(
-    client: TestClient,
-    db: Session,
+async def test_read_quizzes(
+    client: AsyncClient,
+    db: AsyncSession,
 )->None:
     """
     Test retrieving a list of quizzes for an authenticated user.
@@ -77,12 +78,12 @@ def test_read_quizzes(
     Validates that the endpoint returns a 200 status code and includes
     both 'data' and 'count' fields in the response.
     """
-    user = create_random_user(db)
+    user = await create_random_user(db)
     headers = user_authentication_headers(
         client=client, email=user.email, password="testpass"
     )
 
-    response = client.get(
+    response = await client.get(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/",
         headers=headers,
     )
@@ -92,9 +93,9 @@ def test_read_quizzes(
     assert "count" in response.json()
 
 
-def test_read_quizzes_no_permission(
-    client: TestClient,
-    db: Session,
+async def test_read_quizzes_no_permission(
+    client: AsyncClient,
+    db: AsyncSession,
 ) -> None:
     """
     Test unauthorized access to another user's quizzes.
@@ -102,13 +103,13 @@ def test_read_quizzes_no_permission(
     Confirms that attempting to read quizzes for another user
     results in a 403 Forbidden error with permission denial message.
     """
-    user = create_random_user(db)
+    user = await create_random_user(db)
     headers = user_authentication_headers(
         client=client, email=user.email, password="testpass"
     )
     random_user_id = str(uuid7str())
 
-    response = client.get(
+    response = await client.get(
         f"{settings.API_V1_STR}/users/{random_user_id}/quizzes/",
         headers=headers,
     )
@@ -118,9 +119,9 @@ def test_read_quizzes_no_permission(
     assert content["detail"] == "You do not have permission to access this resource."
 
 
-def test_read_quiz(
-    client: TestClient,
-    db: Session,
+async def test_read_quiz(
+    client: AsyncClient,
+    db: AsyncSession,
 ) -> None:
     """
     Test retrieving a specific quiz by ID for the owner user.
@@ -128,16 +129,16 @@ def test_read_quiz(
     Verifies that the quiz data including exercises is correctly returned
     with a 200 status code and matches the stored quiz information.
     """
-    quiz = create_random_quiz(db)
+    quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
-    user = db.exec(statement).first()
+    user = (await db.exec(statement)).first()
     headers = user_authentication_headers(
         client=client,
         email=user.email,
         password="testpass",
     )
 
-    response = client.get(
+    response = await client.get(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}/",
         headers=headers,
     )
@@ -156,9 +157,9 @@ def test_read_quiz(
         assert response_ex["solution"] == quiz_ex.solution
 
 
-def test_read_quiz_not_found(
-    client: TestClient,
-    db: Session,
+async def test_read_quiz_not_found(
+    client: AsyncClient,
+    db: AsyncSession,
 ) -> None:
     """
     Test accessing a non-existent quiz.
@@ -166,7 +167,7 @@ def test_read_quiz_not_found(
     Ensures that requesting a quiz with an invalid ID returns
     a 404 Not Found error with appropriate message.
     """
-    user = create_random_user(db)
+    user = await create_random_user(db)
     headers = user_authentication_headers(
         client=client,
         email=user.email,
@@ -174,7 +175,7 @@ def test_read_quiz_not_found(
     )
     fake_id = str(uuid7str)
 
-    response = client.get(
+    response = await client.get(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/{fake_id}/",
         headers=headers,
     )
@@ -184,8 +185,8 @@ def test_read_quiz_not_found(
     assert content["detail"] == "Quiz not found"
 
 
-def test_read_quiz_not_enough_permission(
-    client: TestClient, db: Session, normal_user_token_headers: dict[str, str]
+async def test_read_quiz_not_enough_permission(
+    client: AsyncClient, db: AsyncSession, normal_user_token_headers: dict[str, str]
 ) -> None:
     """
     Test unauthorized access to another user's quiz.
@@ -193,11 +194,11 @@ def test_read_quiz_not_enough_permission(
     Validates that a normal user cannot access a quiz owned by another user,
     resulting in a 403 Forbidden error.
     """
-    quiz = create_random_quiz(db)
+    quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
-    user = db.exec(statement).first()
+    user = (db.exec(statement)).first()
 
-    response = client.get(
+    response = await client.get(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}/",
         headers=normal_user_token_headers,
     )
@@ -207,9 +208,9 @@ def test_read_quiz_not_enough_permission(
     assert content["detail"] == "You do not have permission to access this resource."
 
 
-def test_update_quiz(
-    client: TestClient,
-    db: Session,
+async def test_update_quiz(
+    client: AsyncClient,
+    db: AsyncSession,
 ) -> None:
     """
     Test updating a quiz's properties by the owner.
@@ -217,9 +218,9 @@ def test_update_quiz(
     Verifies that the quiz's active status can be successfully modified
     and the changes are reflected in the response.
     """
-    quiz = create_random_quiz(db)
+    quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
-    user = db.exec(statement).first()
+    user = (await db.exec(statement)).first()
     headers = user_authentication_headers(
         client=client,
         email=user.email,
@@ -228,7 +229,7 @@ def test_update_quiz(
     quiz.is_active = False
     update_data = {"is_active": True}
 
-    response = client.put(
+    response = await client.put(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}/",
         headers=headers,
         json=update_data,
@@ -239,16 +240,16 @@ def test_update_quiz(
     assert content["is_active"] == update_data["is_active"]
 
 
-def test_update_quiz_not_found(client: TestClient, db: Session) -> None:
+async def test_update_quiz_not_found(client: AsyncClient, db: AsyncSession) -> None:
     """
     Test updating a non-existent quiz.
 
     Ensures that attempting to modify a quiz with an invalid ID
     returns a 404 Not Found error with appropriate message.
     """
-    quiz = create_random_quiz(db)
+    quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
-    user = db.exec(statement).first()
+    user = (await db.exec(statement)).first()
     headers = user_authentication_headers(
         client=client,
         email=user.email,
@@ -258,7 +259,7 @@ def test_update_quiz_not_found(client: TestClient, db: Session) -> None:
 
     update_data = {"is_active": True}
     fake_id = str(uuid7str())
-    response = client.put(
+    response = await client.put(
         f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{fake_id}/",
         headers=headers,
         json=update_data,
@@ -269,8 +270,8 @@ def test_update_quiz_not_found(client: TestClient, db: Session) -> None:
     assert content["detail"] == "Quiz not found"
 
 
-def test_update_quiz_not_enough_permission(
-    client: TestClient, db: Session, normal_user_token_headers: dict[str, str]
+async def test_update_quiz_not_enough_permission(
+    client: AsyncClient, db: AsyncSession, normal_user_token_headers: dict[str, str]
 ) -> None:
     """
     Test unauthorized quiz update attempt.
@@ -278,11 +279,11 @@ def test_update_quiz_not_enough_permission(
     Confirms that a user without ownership cannot modify another user's quiz,
     resulting in a 403 Forbidden error with appropriate message.
     """
-    quiz = create_random_quiz(db)
+    quiz = await create_random_quiz(db)
 
     update_data = {"is_active": True}
 
-    response = client.put(
+    response = await client.put(
         f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}/",
         headers=normal_user_token_headers,
         json=update_data,
@@ -294,23 +295,23 @@ def test_update_quiz_not_enough_permission(
     assert content["detail"] == "You cant save a quiz for someone else."
 
 
-def test_delete_quiz(client: TestClient, db: Session) -> None:
+async def test_delete_quiz(client: AsyncClient, db: AsyncSession) -> None:
     """
     Test deleting a quiz by its owner.
 
     Validates that the quiz deletion is successful and the response
     contains the confirmation message.
     """
-    quiz = create_random_quiz(db)
+    quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
-    user = db.exec(statement).first()
+    user = (await db.exec(statement)).first()
     headers = user_authentication_headers(
         client=client,
         email=user.email,
         password="testpass",
     )
 
-    response = client.delete(
+    response = await client.delete(
         f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}/",
         headers=headers,
     )
@@ -319,16 +320,16 @@ def test_delete_quiz(client: TestClient, db: Session) -> None:
     assert content["message"] == "Quiz deleted successfully"
 
 
-def test_delete_not_found(client: TestClient, db: Session) -> None:
+async def test_delete_not_found(client: AsyncClient, db: AsyncSession) -> None:
     """
     Test deleting a non-existent quiz.
 
     Ensures that attempting to delete a quiz with an invalid ID
     returns a 404 Not Found error with appropriate message.
     """
-    quiz = create_random_quiz(db)
+    quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
-    user = db.exec(statement).first()
+    user = (await db.exec(statement)).first()
     headers = user_authentication_headers(
         client=client,
         email=user.email,
@@ -337,7 +338,7 @@ def test_delete_not_found(client: TestClient, db: Session) -> None:
 
     fake_id = str(uuid7str())
 
-    response = client.delete(
+    response = await client.delete(
         f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{fake_id}/",
         headers=headers,
     )
@@ -347,8 +348,8 @@ def test_delete_not_found(client: TestClient, db: Session) -> None:
     assert content["detail"] == "Quiz not found"
 
 
-def test_delete_not_enough_permission(
-    client: TestClient, db: Session, normal_user_token_headers: dict[str, str]
+async def test_delete_not_enough_permission(
+    client: AsyncClient, db: AsyncSession, normal_user_token_headers: dict[str, str]
 ) -> None:
     """
     Test unauthorized quiz deletion attempt.
@@ -356,9 +357,9 @@ def test_delete_not_enough_permission(
     Confirms that a user without ownership cannot delete another user's quiz,
     resulting in a 403 Forbidden error with appropriate message.
     """
-    quiz = create_random_quiz(db)
+    quiz = await create_random_quiz(db)
 
-    response = client.delete(
+    response = await client.delete(
         f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}/",
         headers=normal_user_token_headers,
     )

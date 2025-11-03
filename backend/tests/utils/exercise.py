@@ -1,7 +1,6 @@
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app import crud
-from app.models import Exercise, ExerciseCreate
+from app.models import Exercise
 from tests.utils.utils import random_lower_string
 
 

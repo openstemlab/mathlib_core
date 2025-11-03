@@ -20,7 +20,7 @@ async def user_authentication_headers(
     Sends credentials to the login endpoint and returns headers
     containing the Bearer token for authorized requests.
     Args:
-        client: TestClient instance for making HTTP requests
+        client: AsyncClient instance for making HTTP requests
         email: User's email address
         password: User's password
     Returns:
@@ -62,7 +62,7 @@ async def authentication_token_from_email(
     a new random value. If not, creates a new user with the provided email
     and generated password. Returns authentication headers for the user.
     Args:
-        client: TestClient instance for making HTTP requests
+        client: AsyncClient instance for making HTTP requests
         email: Target user's email address
         db: Database session for CRUD operations
     Returns:
