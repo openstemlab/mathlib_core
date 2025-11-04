@@ -79,4 +79,4 @@ async def authentication_token_from_email(
             raise Exception("User id not set")
         user = await crud.update_user(session=db, db_user=user, user_in=user_in_update)
 
-    return user_authentication_headers(client=client, email=email, password=password)
+    return await user_authentication_headers(client=client, email=email, password=password)

@@ -13,7 +13,7 @@ async def create_random_quiz(db: AsyncSession) -> QuizPublic:
     :param: db - the database session.
     :returns: QuizPublic - public representation of the quiz.
     """
-    user = create_random_user(db)
+    user = await create_random_user(db)
     tag = random_lower_string()
     title = random_lower_string()
     for _ in range(5):
@@ -21,5 +21,5 @@ async def create_random_quiz(db: AsyncSession) -> QuizPublic:
         exercise.tags.append(tag)
         db.add(exercise)
     await db.commit()
-    quiz = form_quiz(length=5, tags=[tag], owner_id=user.id, title=title, session=db)
+    quiz = await form_quiz(length=5, tags=[tag], owner_id=user.id, title=title, session=db)
     return quiz

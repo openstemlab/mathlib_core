@@ -1,18 +1,19 @@
 import random
 import string
+import pytest
 
-from httpx import AsyncClient
+from httpx import AsyncClient, HTTPStatusError
 
 from app.core.config import settings
 
 
-async def random_lower_string() -> str:
+def random_lower_string() -> str:
     """Returns a 32 random ascii symbols long string"""
 
     return "".join(random.choices(string.ascii_lowercase, k=32))
 
 
-async def random_email() -> str:
+def random_email() -> str:
     """Returns a string in email format."""
 
     return f"{random_lower_string()}@{random_lower_string()}.com"
@@ -26,6 +27,8 @@ async def get_superuser_token_headers(client: AsyncClient) -> dict[str, str]:
         "password": settings.FIRST_SUPERUSER_PASSWORD,
     }
     r = await client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    
+
     tokens = r.json()
     a_token = tokens["access_token"]
     headers = {"Authorization": f"Bearer {a_token}"}

@@ -40,10 +40,10 @@ async def read_users(session: SessionDep, skip: int = 0, limit: int = 100) -> An
     """
 
     count_statement = select(func.count()).select_from(User)
-    count = await session.exec(count_statement).one()
+    count = (await session.exec(count_statement)).one()
 
     statement = select(User).offset(skip).limit(limit)
-    users = await session.exec(statement).all()
+    users = (await session.exec(statement)).all()
 
     return UsersPublic(data=users, count=count)
 
@@ -188,6 +188,7 @@ async def update_user(
     Update a user.
     """
 
+    print("DEBUG: update_user called", user_id, type(session))
     db_user = await session.get(User, user_id)
     if not db_user:
         raise HTTPException(

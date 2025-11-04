@@ -1,4 +1,5 @@
 from unittest.mock import patch
+import pytest
 
 from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -11,6 +12,8 @@ from app.utils import generate_password_reset_token
 from tests.utils.user import user_authentication_headers
 from tests.utils.utils import random_email, random_lower_string
 
+
+pytestmark = pytest.mark.asyncio(loop_scope="module")
 
 async def test_get_access_token(client: AsyncClient) -> None:
     login_data = {
@@ -48,7 +51,7 @@ async def test_use_access_token(
 async def test_recovery_password(
     client: AsyncClient, normal_user_token_headers: dict[str, str]
 ) -> None:
-    async with (
+    with (
         patch("app.core.config.settings.SMTP_HOST", "smtp.example.com"),
         patch("app.core.config.settings.SMTP_USER", "admin@example.com"),
     ):
@@ -85,8 +88,8 @@ async def test_reset_password(client: AsyncClient, db: AsyncSession) -> None:
         is_superuser=False,
     )
     user = await create_user(session=db, user_create=user_create)
-    token = await generate_password_reset_token(email=email)
-    headers = user_authentication_headers(client=client, email=email, password=password)
+    token = generate_password_reset_token(email=email)
+    headers = await user_authentication_headers(client=client, email=email, password=password)
     data = {"new_password": new_password, "token": token}
 
     r = await client.post(

@@ -1,25 +1,27 @@
 from unittest.mock import MagicMock, patch
+import pytest
 
 from sqlmodel import select
 
 from app.backend_pre_start import init, logger
 
+pytestmark=pytest.mark.asyncio(loop_scope="module")
 
-def test_init_successful_connection() -> None:
+async def test_init_successful_connection() -> None:
     engine_mock = MagicMock()
 
     session_mock = MagicMock()
     exec_mock = MagicMock(return_value=True)
     session_mock.configure_mock(**{"exec.return_value": exec_mock})
 
-    with (
+    async with (
         patch("sqlmodel.Session", return_value=session_mock),
         patch.object(logger, "info"),
         patch.object(logger, "error"),
         patch.object(logger, "warn"),
     ):
         try:
-            init(engine_mock)
+            await init(engine_mock)
             connection_successful = True
         except Exception:
             connection_successful = False

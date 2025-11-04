@@ -1,6 +1,7 @@
 """
 Tests for testing tests.
 """
+import pytest
 from uuid_extensions import uuid7str
 
 from httpx import AsyncClient
@@ -14,6 +15,8 @@ from tests.utils.exercise import create_random_exercise
 from app.models import QuizCreate, User
 
 
+pytestmark = pytest.mark.asyncio(loop_scope="module")
+
 async def test_create_quiz(client: AsyncClient, db: AsyncSession) -> None:
     """
     Test quiz creation for an authenticated user.
@@ -22,10 +25,10 @@ async def test_create_quiz(client: AsyncClient, db: AsyncSession) -> None:
     the response contains the correct owner ID, quiz status, and empty exercises list.
     """
     user = await create_random_user(db)
-    headers = user_authentication_headers(
+    headers = await user_authentication_headers(
         client=client, email=user.email, password="testpass"
     )
-    exercises = [create_random_exercise(db) for _ in range(3)]
+    exercises = [( await create_random_exercise(db)) for _ in range(3)]
     exercise_positions = [(ex.id, i) for i, ex in enumerate(exercises)]
     quiz_in = QuizCreate(is_active=False, exercise_positions=exercise_positions,)
 
@@ -53,7 +56,7 @@ async def test_create_quiz_for_other_user(
     a 403 Forbidden response with appropriate error message.
     """
     user1 = await create_random_user(db)
-    headers = user_authentication_headers(
+    headers = await user_authentication_headers(
         client=client, email=user1.email, password="testpass"
     )
     user2 = await create_random_user(db)
@@ -79,7 +82,7 @@ async def test_read_quizzes(
     both 'data' and 'count' fields in the response.
     """
     user = await create_random_user(db)
-    headers = user_authentication_headers(
+    headers = await user_authentication_headers(
         client=client, email=user.email, password="testpass"
     )
 
@@ -104,10 +107,10 @@ async def test_read_quizzes_no_permission(
     results in a 403 Forbidden error with permission denial message.
     """
     user = await create_random_user(db)
-    headers = user_authentication_headers(
+    headers = await user_authentication_headers(
         client=client, email=user.email, password="testpass"
     )
-    random_user_id = str(uuid7str())
+    random_user_id = uuid7str()
 
     response = await client.get(
         f"{settings.API_V1_STR}/users/{random_user_id}/quizzes/",
@@ -132,7 +135,7 @@ async def test_read_quiz(
     quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
     user = (await db.exec(statement)).first()
-    headers = user_authentication_headers(
+    headers = await user_authentication_headers(
         client=client,
         email=user.email,
         password="testpass",
@@ -168,12 +171,12 @@ async def test_read_quiz_not_found(
     a 404 Not Found error with appropriate message.
     """
     user = await create_random_user(db)
-    headers = user_authentication_headers(
+    headers = await user_authentication_headers(
         client=client,
         email=user.email,
         password="testpass",
     )
-    fake_id = str(uuid7str)
+    fake_id = uuid7str()
 
     response = await client.get(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/{fake_id}/",
@@ -196,7 +199,7 @@ async def test_read_quiz_not_enough_permission(
     """
     quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
-    user = (db.exec(statement)).first()
+    user = (await db.exec(statement)).first()
 
     response = await client.get(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}/",
@@ -221,7 +224,7 @@ async def test_update_quiz(
     quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
     user = (await db.exec(statement)).first()
-    headers = user_authentication_headers(
+    headers = await user_authentication_headers(
         client=client,
         email=user.email,
         password="testpass",
@@ -250,7 +253,7 @@ async def test_update_quiz_not_found(client: AsyncClient, db: AsyncSession) -> N
     quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
     user = (await db.exec(statement)).first()
-    headers = user_authentication_headers(
+    headers = await user_authentication_headers(
         client=client,
         email=user.email,
         password="testpass",
@@ -305,7 +308,7 @@ async def test_delete_quiz(client: AsyncClient, db: AsyncSession) -> None:
     quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
     user = (await db.exec(statement)).first()
-    headers = user_authentication_headers(
+    headers = await user_authentication_headers(
         client=client,
         email=user.email,
         password="testpass",
@@ -330,7 +333,7 @@ async def test_delete_not_found(client: AsyncClient, db: AsyncSession) -> None:
     quiz = await create_random_quiz(db)
     statement = select(User).where(User.id == quiz.owner_id)
     user = (await db.exec(statement)).first()
-    headers = user_authentication_headers(
+    headers = await user_authentication_headers(
         client=client,
         email=user.email,
         password="testpass",

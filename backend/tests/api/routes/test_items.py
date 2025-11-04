@@ -12,7 +12,6 @@ from tests.utils.item import create_random_item
 
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
-loop: asyncio.AbstractEventLoop
 
 async def test_create_item(
     client: AsyncClient, superuser_token_headers: dict[str, str]
@@ -77,7 +76,7 @@ async def test_read_items(
 ) -> None:
     await create_random_item(db)
     await create_random_item(db)
-    response = client.get(
+    response = await client.get(
         f"{settings.API_V1_STR}/items/",
         headers=superuser_token_headers,
     )

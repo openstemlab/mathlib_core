@@ -13,7 +13,7 @@ from tests.utils.utils import random_lower_string
 
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
-# loop: asyncio.AbstractEventLoop
+
 
 async def test_create_exercise(
     client: httpx.AsyncClient, superuser_token_headers: dict[str, str]

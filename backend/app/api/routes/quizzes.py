@@ -40,14 +40,14 @@ async def read_quizzes(
     user = await session.get(User, user_id)
     if user == current_user:
         count_statement = select(func.count()).select_from(Quiz)
-        count = await session.exec(count_statement).one()
+        count = (await session.exec(count_statement)).one()
         statement = (
             select(Quiz).where(Quiz.owner_id == user_id).offset(skip).limit(limit)
         )
         if count == 0:
             return QuizzesPublic(data=[], count=0)
         else:
-            quizzes = await session.exec(statement).all()
+            quizzes = (await session.exec(statement)).all()
             return QuizzesPublic(data=quizzes, count=count)
 
     else:
@@ -73,7 +73,7 @@ async def read_quiz(
         statement = (
             select(Exercise).join(QuizExercise).where(QuizExercise.quiz_id == id)
         )
-        db_exercises = await session.exec(statement).all()
+        db_exercises = (await session.exec(statement)).all()
         response = QuizPublic(
             id=quiz.id,
             owner_id=quiz.owner_id,

@@ -1,3 +1,5 @@
+import pytest
+
 from httpx import AsyncClient
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -5,6 +7,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.core.config import settings
 from app.models import User
 
+
+pytestmark = pytest.mark.asyncio(loop_scope="module")
 
 async def test_create_user(client: AsyncClient, db: AsyncSession) -> None:
     r = await client.post(

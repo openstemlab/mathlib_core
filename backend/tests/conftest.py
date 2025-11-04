@@ -18,22 +18,25 @@ from tests.utils.utils import get_superuser_token_headers
 @pytest_asyncio.fixture(scope="session")
 async def db() -> AsyncGenerator[AsyncSession,None]:
     async with AsyncSession(async_engine) as session:
+        await init_db(session)
+        await session.commit()
         yield session
+        await session.rollback()
 
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def client() -> AsyncGenerator[AsyncClient, None]:
     async with AsyncClient(transport=ASGITransport(app=app),base_url="http://test") as c:
         yield c
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def superuser_token_headers(client: AsyncClient) -> dict[str, str]:
     return await get_superuser_token_headers(client)
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture(scope="session")
 async def normal_user_token_headers(client: AsyncClient, db: AsyncSession) -> dict[str, str]:
     return await authentication_token_from_email(
         client=client, email=settings.EMAIL_TEST_USER, db=db

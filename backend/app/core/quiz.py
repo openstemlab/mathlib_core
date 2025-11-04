@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from app.models import Exercise, ExercisePublic, Quiz, QuizPublic
 
 
-def form_quiz(
+async def form_quiz(
     length: int,
     tags: list[str], 
     owner_id: str,
@@ -27,7 +27,7 @@ def form_quiz(
 
     statement = select(Exercise).where(
     or_(*[Exercise.tags.op('?')(tag) for tag in tags])).limit(length)
-    exercises = session.exec(statement).all()
+    exercises = (await session.exec(statement)).all()
 
     if len(exercises) < length:
         length = len(exercises)
@@ -49,8 +49,8 @@ def form_quiz(
         quiz_exercise.position = position
 
     session.add(quiz)
-    session.commit()
-    session.refresh(quiz)
+    await session.commit()
+    await session.refresh(quiz)
 
     quiz_public = QuizPublic(
         id=quiz.id,
