@@ -1,10 +1,7 @@
 from collections.abc import Generator, AsyncGenerator
 
-import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
-from sqlmodel import Session, delete
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings

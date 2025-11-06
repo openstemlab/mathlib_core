@@ -152,6 +152,7 @@ async def delete_quiz(
     quiz = await session.get(Quiz, id)
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
+        
     if current_user.id == quiz.owner_id:
         await session.delete(quiz)
         await session.commit()

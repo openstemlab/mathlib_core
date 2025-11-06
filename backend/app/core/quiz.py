@@ -1,9 +1,10 @@
 
 import random
 from uuid_extensions import uuid7str
-from sqlmodel import Session, select
+from sqlmodel import  select
 from sqlalchemy import cast, String, or_
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models import Exercise, ExercisePublic, Quiz, QuizPublic
 
@@ -13,7 +14,7 @@ async def form_quiz(
     tags: list[str], 
     owner_id: str,
     title: str|None, 
-    session: Session
+    session: AsyncSession
 ) -> QuizPublic:
     """
     Form a quiz by selecting exercises based on the provided tags and populate a Quiz model.
