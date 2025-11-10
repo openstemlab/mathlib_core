@@ -6,7 +6,7 @@ from tests.utils.utils import random_lower_string
 
 async def create_random_exercise(db: AsyncSession) -> Exercise:
     """Creates a randomised exercise."""
-    
+
     source_name = random_lower_string()
     source_id = random_lower_string()
     text = random_lower_string()
@@ -20,6 +20,5 @@ async def create_random_exercise(db: AsyncSession) -> Exercise:
         tags=tags,
     )
     db.add(exercise)
-    await db.commit()
-    await db.refresh(exercise)
+    await db.flush()
     return exercise

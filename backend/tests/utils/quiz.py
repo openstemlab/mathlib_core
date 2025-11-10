@@ -18,13 +18,13 @@ async def create_random_quiz(db: AsyncSession) -> QuizPublic:
     user = await create_random_user(db)
     tag = random_lower_string()
     title = random_lower_string()
-    
+
     for _ in range(5):
         exercise = await create_random_exercise(db)
         exercise.tags.append(tag)
         db.add(exercise)
 
-    await db.commit()
+    await db.flush()
 
     quiz = await form_quiz(length=5, tags=[tag], owner_id=user.id, title=title, session=db)
     return quiz

@@ -4,6 +4,7 @@ from uuid_extensions import uuid7str
 from sqlmodel import  select
 from sqlalchemy import cast, String, or_
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models import Exercise, ExercisePublic, Quiz, QuizPublic
@@ -11,10 +12,10 @@ from app.models import Exercise, ExercisePublic, Quiz, QuizPublic
 
 async def form_quiz(
     length: int,
-    tags: list[str], 
+    tags: list[str],
     owner_id: str,
-    title: str|None, 
-    session: AsyncSession
+    title: str | None,
+    session: AsyncSession,
 ) -> QuizPublic:
     """
     Form a quiz by selecting exercises based on the provided tags and populate a Quiz model.
@@ -50,8 +51,8 @@ async def form_quiz(
         quiz_exercise.position = position
 
     session.add(quiz)
-    await session.commit()
-    await session.refresh(quiz)
+    await session.flush()
+    await session.refresh(quiz, ["exercises"])
 
     quiz_public = QuizPublic(
         id=quiz.id,
