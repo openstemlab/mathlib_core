@@ -16,9 +16,11 @@ from app.models import (
     QuizUpdate,
     QuizPublic,
     QuizzesPublic,
+    QuizStatusChoices,
     QuizExercise,
     Exercise,
     ExercisePublic,
+    SubmitAnswer,
     Message,
     User,
 )
@@ -77,7 +79,8 @@ async def read_quiz(
         response = QuizPublic(
             id=quiz.id,
             owner_id=quiz.owner_id,
-            is_active=quiz.is_active,
+            status=quiz.status,
+            title=quiz.title,
             exercises=[
                 ExercisePublic.model_validate(exercise) for exercise in db_exercises
             ],
@@ -161,4 +164,89 @@ async def delete_quiz(
     else:
         raise HTTPException(
             status_code=403, detail="You cant delete a quiz for someone else."
+        )
+    
+
+@router.get("/{id}/start", response_model=QuizPublic)
+async def start_quiz(
+    session: SessionDep,
+    current_user: CurrentUser,
+    id: str,
+) -> Any:
+    """
+    Start a quiz by setting its status to active.
+    """
+    quiz = await session.get(Quiz, id)
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    if current_user.id == quiz.owner_id:
+
+        old_active = select(Quiz).where(
+            Quiz.owner_id == current_user.id, Quiz.status == QuizStatusChoices.ACTIVE.value
+        )
+        old_active_quiz = (await session.exec(old_active)).first()
+
+        if old_active_quiz:
+            old_active_quiz.status = QuizStatusChoices.IN_PROGRESS.value
+            session.add(old_active_quiz)
+            await session.commit()
+            await session.refresh(old_active_quiz)
+        
+        quiz.status = QuizStatusChoices.ACTIVE.value
+
+        session.add(quiz)
+        await session.commit()
+        await session.refresh(quiz)
+        return QuizPublic.model_validate(quiz)
+
+    else:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to start this quiz.",
+        )
+
+
+@router.put("/{id}/save", response_model=QuizPublic)
+async def save_quiz(
+    session: SessionDep,
+    current_user: CurrentUser,
+    id: str,
+    answers: SubmitAnswer,
+) -> Any:
+    """
+    Save a quiz by setting its status to in_progress.
+    """
+    quiz = await session.get(Quiz, id)
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    if current_user.id == quiz.owner_id:
+        statement = (
+            select(Exercise, QuizExercise)
+            .join(QuizExercise)
+            .where(QuizExercise.quiz_id == id)
+        )
+        exercise_data = (await session.exec(statement)).all()
+
+        exercise_map = {ex.id: (ex, qex) for ex, qex in exercise_data}
+
+        for exercise_id, user_answer in answers.responses:
+            if exercise_id not in exercise_map:
+                raise HTTPException(status_code=400, detail=f"Exercise {exercise_id} not in quiz")
+
+            exercise, quiz_exercise = exercise_map[exercise_id]
+            correct = user_answer.strip() == exercise.solution.strip()
+
+            # Update correctness
+            quiz_exercise.is_correct = correct
+            session.add(quiz_exercise)
+        await session.commit()
+        await session.refresh(quiz)
+        return QuizPublic.model_validate(quiz)
+
+    else:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to save this quiz.",
         )

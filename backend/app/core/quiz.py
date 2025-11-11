@@ -40,7 +40,7 @@ async def form_quiz(
     quiz = Quiz(
         owner_id=owner_id,
         title=title,
-        is_active=False
+        status="new",
     )
 
     # adding exercises and positions to the quiz using link model
@@ -57,7 +57,7 @@ async def form_quiz(
     quiz_public = QuizPublic(
         id=quiz.id,
         owner_id=quiz.owner_id,
-        is_active=quiz.is_active,
+        status=quiz.status,
         title=quiz.title,
         exercises=[(ExercisePublic.model_validate(ex), ex.link.position) for ex in quiz.exercises]
     )

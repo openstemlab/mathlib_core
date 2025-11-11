@@ -27,4 +27,6 @@ async def create_random_quiz(db: AsyncSession) -> QuizPublic:
     await db.flush()
 
     quiz = await form_quiz(length=5, tags=[tag], owner_id=user.id, title=title, session=db)
+
+    await db.commit()
     return quiz

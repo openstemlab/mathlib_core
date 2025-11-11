@@ -30,7 +30,7 @@ async def test_create_quiz(client: AsyncClient, db: AsyncSession) -> None:
     )
     exercises = [( await create_random_exercise(db)) for _ in range(3)]
     exercise_positions = [(ex.id, i) for i, ex in enumerate(exercises)]
-    quiz_in = QuizCreate(is_active=False, exercise_positions=exercise_positions,)
+    quiz_in = QuizCreate(status="new", exercise_positions=exercise_positions,)
 
     response = await client.post(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/",
@@ -40,7 +40,7 @@ async def test_create_quiz(client: AsyncClient, db: AsyncSession) -> None:
     assert response.status_code == 200
     content = response.json()
     assert content["owner_id"] == str(user.id)
-    assert content["is_active"] == False
+    assert content["status"] == "new"
     assert "exercises" in content
     assert len(content["exercises"]) == 0
 
@@ -60,7 +60,7 @@ async def test_create_quiz_for_other_user(
         client=client, email=user1.email, password="testpass"
     )
     user2 = await create_random_user(db)
-    quiz_in = QuizCreate(is_active=False)
+    quiz_in = QuizCreate(status="new", exercise_positions=[])
     response = await client.post(
         f"{settings.API_V1_STR}/users/{user2.id}/quizzes/",
         headers=headers,
@@ -142,16 +142,16 @@ async def test_read_quiz(
     )
 
     response = await client.get(
-        f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}/",
+        f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}",
         headers=headers,
     )
 
     assert response.status_code == 200
     content = response.json()
-    assert all(key in content for key in ["id", "owner_id", "is_active", "exercises"])
+    assert all(key in content for key in ["id", "owner_id", "status", "exercises"])
     assert quiz.id == content["id"]
     assert quiz.owner_id == content["owner_id"]
-    assert quiz.is_active == content["is_active"]
+    assert quiz.status == content["status"]
 
     assert len(content["exercises"]) == len(quiz.exercises)
     for response_ex, quiz_ex in zip(content["exercises"], quiz.exercises):
@@ -179,7 +179,7 @@ async def test_read_quiz_not_found(
     fake_id = uuid7str()
 
     response = await client.get(
-        f"{settings.API_V1_STR}/users/{user.id}/quizzes/{fake_id}/",
+        f"{settings.API_V1_STR}/users/{user.id}/quizzes/{fake_id}",
         headers=headers,
     )
 
@@ -202,7 +202,7 @@ async def test_read_quiz_not_enough_permission(
     user = (await db.exec(statement)).first()
 
     response = await client.get(
-        f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}/",
+        f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}",
         headers=normal_user_token_headers,
     )
 
@@ -229,18 +229,18 @@ async def test_update_quiz(
         email=user.email,
         password="testpass",
     )
-    quiz.is_active = False
-    update_data = {"is_active": True}
+    quiz.status = False
+    update_data = {"status": "in_progress"}
 
     response = await client.put(
-        f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}/",
+        f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}",
         headers=headers,
         json=update_data,
     )
 
     assert response.status_code == 200
     content = response.json()
-    assert content["is_active"] == update_data["is_active"]
+    assert content["status"] == update_data["status"]
 
 
 async def test_update_quiz_not_found(client: AsyncClient, db: AsyncSession) -> None:
@@ -258,12 +258,12 @@ async def test_update_quiz_not_found(client: AsyncClient, db: AsyncSession) -> N
         email=user.email,
         password="testpass",
     )
-    quiz.is_active = False
+    quiz.status = False
 
-    update_data = {"is_active": True}
+    update_data = {"status": "in_progress"}
     fake_id = str(uuid7str())
     response = await client.put(
-        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{fake_id}/",
+        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{fake_id}",
         headers=headers,
         json=update_data,
     )
@@ -284,10 +284,10 @@ async def test_update_quiz_not_enough_permission(
     """
     quiz = await create_random_quiz(db)
 
-    update_data = {"is_active": True}
+    update_data = {"status": "in_progress"}
 
     response = await client.put(
-        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}/",
+        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}",
         headers=normal_user_token_headers,
         json=update_data,
     )
@@ -315,7 +315,7 @@ async def test_delete_quiz(client: AsyncClient, db: AsyncSession) -> None:
     )
 
     response = await client.delete(
-        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}/",
+        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}",
         headers=headers,
     )
     assert response.status_code == 200
@@ -342,7 +342,7 @@ async def test_delete_not_found(client: AsyncClient, db: AsyncSession) -> None:
     fake_id = str(uuid7str())
 
     response = await client.delete(
-        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{fake_id}/",
+        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{fake_id}",
         headers=headers,
     )
 
@@ -363,7 +363,7 @@ async def test_delete_not_enough_permission(
     quiz = await create_random_quiz(db)
 
     response = await client.delete(
-        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}/",
+        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}",
         headers=normal_user_token_headers,
     )
 

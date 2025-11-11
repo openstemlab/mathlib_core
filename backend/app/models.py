@@ -1,9 +1,9 @@
 from uuid_extensions import uuid7str
-import json
+from enum import Enum
 
 from pydantic import EmailStr, field_validator
 from sqlmodel import Field, Relationship, SQLModel
-from sqlalchemy import Column
+from sqlalchemy import Column, String, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 
 
@@ -104,8 +104,14 @@ class User(UserBase, table=True):
     __tablename__ = "user"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     hashed_password: str
-    items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
-    quizzes: list["Quiz"] = Relationship(back_populates="owner", cascade_delete=True)
+    items: list["Item"] = Relationship(
+        back_populates="owner", 
+        cascade_delete=True,
+        sa_relationship_kwargs={'lazy': 'selectin'},)
+    quizzes: list["Quiz"] = Relationship(
+        back_populates="owner", 
+        cascade_delete=True, 
+        sa_relationship_kwargs={'lazy': 'selectin'})
 
 
 # Properties to return via API, id is always required
@@ -174,7 +180,10 @@ class Item(ItemBase, table=True):
     __tablename__ = "item"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
-    owner: User | None = Relationship(back_populates="items")
+    owner: User | None = Relationship(
+        back_populates="items", 
+        sa_relationship_kwargs={'lazy': 'selectin'}
+        )
 
 
 # Properties to return via API, id is always required
@@ -255,6 +264,8 @@ class QuizExercise(SQLModel, table=True):
     Attributes:
         quiz_id: Foreign key to the quiz ID.
         exercise_id: Foreign key to the exercise ID.
+        position: Position of the exercise in the quiz.
+        is_correct: Optional boolean indicating if the exercise was answered correctly. None if not attempted.
     """
 
     __tablename__ = "quizexercise"
@@ -269,7 +280,7 @@ class QuizExercise(SQLModel, table=True):
         ondelete="CASCADE",
     )
     position: int = 0
-    is_solved: bool = False
+    is_correct: bool|None = None 
 
 
 class ExerciseBase(SQLModel):
@@ -346,7 +357,9 @@ class Exercise(ExerciseBase, table=True):
         sa_column=Column(JSONB)
     )
     quizzes: list["Quiz"] = Relationship(
-        back_populates="exercises", link_model=QuizExercise
+        back_populates="exercises", 
+        link_model=QuizExercise, 
+        sa_relationship_kwargs={'lazy': 'selectin'},
     )
 
 
@@ -376,6 +389,14 @@ class ExercisesPublic(SQLModel):
     count: int
 
 
+class QuizStatusChoices(str, Enum):
+    NEW: str = "new" #freshly created, not started yet
+    IN_PROGRESS: str = "in_progress" #started but not completed
+    ACTIVE: str = "active" #last attempt is active
+    SUBMITTED: str = "submitted" #completed but not graded yet
+    GRADED: str = "graded" #graded and finished
+
+
 class QuizBase(SQLModel):
     """Base model for a quiz.
 
@@ -383,7 +404,7 @@ class QuizBase(SQLModel):
         is_active: Optional flag indicating whether the quiz is active. False by default.
     """
 
-    is_active: bool = False
+    status: QuizStatusChoices = QuizStatusChoices.NEW.value
     title: str|None = Field(default=None, max_length=255)
 
 
@@ -397,7 +418,7 @@ class QuizCreate(QuizBase):
         default_factory=list,
         description="List of tuples containing (exercise_id, position)"
     )
-    pass
+
 
 
 class QuizUpdate(QuizBase):
@@ -407,7 +428,7 @@ class QuizUpdate(QuizBase):
         is_active: Optional. Flag indicating whether the quiz is active.
     """
 
-    is_active: bool | None = None
+    status: QuizStatusChoices | None = QuizStatusChoices.ACTIVE.value
     title: str | None = Field(default=None, max_length=255)
     exercise_positions: list[tuple[str, int]]|None = Field(
         default_factory=list,
@@ -430,7 +451,21 @@ class Quiz(QuizBase, table=True):
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
     owner: User | None = Relationship(back_populates="quizzes")
     exercises: list["Exercise"] = Relationship(
-        back_populates="quizzes", link_model=QuizExercise
+        back_populates="quizzes", 
+        link_model=QuizExercise,
+        sa_relationship_kwargs={'lazy': 'selectin'},
+    )
+    status: str = Field(
+        default=QuizStatusChoices.NEW.value,
+        sa_column=Column(
+            "status",
+            String,
+            CheckConstraint(
+                "status IN ('new', 'in_progress', 'active', 'submitted', 'graded')",
+                name="valid_quiz_status"
+            ),
+            nullable=False,
+        )
     )
 
 
@@ -446,6 +481,7 @@ class QuizPublic(QuizBase):
     id: str
     owner_id: str
     exercises: list[tuple[ExercisePublic, int]]
+    status: str
 
 
 class QuizzesPublic(SQLModel):
@@ -458,3 +494,15 @@ class QuizzesPublic(SQLModel):
     
     data: list[QuizPublic]
     count: int
+
+
+class SubmitAnswer(SQLModel):
+    """Model for submitting an answer to a quiz exercise.
+
+    Attributes:
+        exercise_id: Unique identifier for the exercise.
+        answer: Submitted answer string.
+    """
+
+    exercise_id: str
+    answer: str
