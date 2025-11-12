@@ -63,3 +63,23 @@ async def form_quiz(
     )
 
     return quiz_public
+
+async def deactivate_quizzes(owner_id: str, session: AsyncSession) -> None:
+    """
+    Deactivate all active quizzes for a given user by setting their status to 'in_progress'.
+
+    :param owner_id: The ID of the user whose quizzes are to be deactivated.
+    :param session: The database session.
+    """
+    statement = (
+        select(Quiz)
+        .where(Quiz.owner_id == owner_id, Quiz.status == "active")
+        .with_for_update()  # Prevent concurrent modifications
+    )
+    active_quizzes = (await session.exec(statement)).all()
+
+    for quiz in active_quizzes:
+        quiz.status = "in_progress"
+        session.add(quiz)
+
+    await session.commit()

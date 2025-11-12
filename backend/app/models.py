@@ -480,7 +480,7 @@ class QuizPublic(QuizBase):
 
     id: str
     owner_id: str
-    exercises: list[tuple[ExercisePublic, int]]
+    exercises: list[tuple[ExercisePublic, int]] # list of (exercise, position)
     status: str
 
 
@@ -504,5 +504,4 @@ class SubmitAnswer(SQLModel):
         answer: Submitted answer string.
     """
 
-    exercise_id: str
-    answer: str
+    response: list[dict[str, str]] #[{"exercise_id": str, "answer": str}, ...]

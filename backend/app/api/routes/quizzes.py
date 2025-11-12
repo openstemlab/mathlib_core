@@ -10,6 +10,7 @@ from sqlmodel import select, func
 
 
 from app.api.deps import CurrentUser, SessionDep
+from app.core.quiz import form_quiz, deactivate_quizzes
 from app.models import (
     Quiz,
     QuizCreate,
@@ -167,44 +168,51 @@ async def delete_quiz(
         )
     
 
-@router.get("/{id}/start", response_model=QuizPublic)
+@router.post("/start", response_model=QuizPublic)
 async def start_quiz(
     session: SessionDep,
     current_user: CurrentUser,
-    id: str,
+    length: int,
+    tags: list[str],
+    title: str,
 ) -> Any:
     """
-    Start a quiz by setting its status to active.
+    Start a a new quiz.
     """
-    quiz = await session.get(Quiz, id)
-    if not quiz:
-        raise HTTPException(status_code=404, detail="Quiz not found")
-
-    if current_user.id == quiz.owner_id:
-
-        old_active = select(Quiz).where(
-            Quiz.owner_id == current_user.id, Quiz.status == QuizStatusChoices.ACTIVE.value
+    quiz = await form_quiz(
+        length=length, 
+        tags=tags, 
+        owner_id=current_user.id, 
+        title=title, 
+        session=session
         )
-        old_active_quiz = (await session.exec(old_active)).first()
 
-        if old_active_quiz:
-            old_active_quiz.status = QuizStatusChoices.IN_PROGRESS.value
-            session.add(old_active_quiz)
-            await session.commit()
-            await session.refresh(old_active_quiz)
-        
-        quiz.status = QuizStatusChoices.ACTIVE.value
+    await deactivate_quizzes(owner_id=current_user.id, session=session)
+    
+    quiz.status = QuizStatusChoices.ACTIVE.value
 
-        session.add(quiz)
-        await session.commit()
-        await session.refresh(quiz)
-        return QuizPublic.model_validate(quiz)
+    session.add(quiz)
+    await session.commit()
+    await session.refresh(quiz)
 
-    else:
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have permission to start this quiz.",
-        )
+    statement = (
+        select(Exercise, QuizExercise.position)
+        .join(QuizExercise)
+        .where(QuizExercise.quiz_id == id)
+        .order_by(QuizExercise.position)
+    )
+    result = await session.exec(statement)
+    exercise_data = result.all()
+    exercises = [(ExercisePublic.model_validate(ex), pos) for ex, pos in exercise_data]
+    return QuizPublic(
+        id=quiz.id,
+        owner_id=quiz.owner_id,
+        status=quiz.status,
+        title=quiz.title,
+        exercises=exercises,
+    )
+
+
 
 
 @router.put("/{id}/save", response_model=QuizPublic)
@@ -220,6 +228,12 @@ async def save_quiz(
     quiz = await session.get(Quiz, id)
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
+    
+    if quiz.status == QuizStatusChoices.SUBMITTED.value:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot save a submitted quiz.",
+        )
 
     if current_user.id == quiz.owner_id:
         statement = (
@@ -229,18 +243,22 @@ async def save_quiz(
         )
         exercise_data = (await session.exec(statement)).all()
 
-        exercise_map = {ex.id: (ex, qex) for ex, qex in exercise_data}
+        # making maps for easy access
+        solution_map ={ex.exercise_id: ex.solution for ex, quiz_ex in exercise_data}
 
-        for exercise_id, user_answer in answers.responses:
-            if exercise_id not in exercise_map:
-                raise HTTPException(status_code=400, detail=f"Exercise {exercise_id} not in quiz")
+        exercise_map ={ex.exercise_id: quiz_ex for ex, quiz_ex in exercise_data}
 
-            exercise, quiz_exercise = exercise_map[exercise_id]
-            correct = user_answer.strip() == exercise.solution.strip()
+        for answer in answers.response:
+            exercise_id = answer["exercise_id"]
+            if exercise_id in solution_map:
+                quiz_exercise = exercise_map[exercise_id]
+                correct = answer["answer"].strip() == solution_map[exercise_id].strip()
 
-            # Update correctness
-            quiz_exercise.is_correct = correct
-            session.add(quiz_exercise)
+                # Update correctness
+                quiz_exercise.is_correct = correct
+                session.add(quiz_exercise)
+        quiz.status = QuizStatusChoices.IN_PROGRESS.value
+        session.add(quiz)
         await session.commit()
         await session.refresh(quiz)
         return QuizPublic.model_validate(quiz)
@@ -250,3 +268,103 @@ async def save_quiz(
             status_code=403,
             detail="You do not have permission to save this quiz.",
         )
+    
+
+@router.get("/{id}/load", response_model=QuizPublic)
+async def load_quiz(
+    session: SessionDep,
+    current_user: CurrentUser,
+    id: str,
+) -> Any:
+    """
+    Load a quiz.
+    """
+    quiz = await session.get(Quiz, id)
+
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    if current_user.id != quiz.owner_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to access this resource.",
+        )
+    
+    if quiz.status == QuizStatusChoices.SUBMITTED.value:
+        raise HTTPException(
+            status_code=404,
+            detail="Quiz not found.",
+        )
+
+    statement = (
+        select(Exercise, QuizExercise.position).join(QuizExercise).where(QuizExercise.quiz_id == id)
+    )
+    db_exercises = (await session.exec(statement)).all()
+
+    await deactivate_quizzes(owner_id=current_user.id, session=session)
+    
+    quiz.status = QuizStatusChoices.ACTIVE.value
+
+    session.add(quiz)
+    await session.commit()
+    await session.refresh(quiz)
+
+    response = QuizPublic(
+        id=quiz.id,
+        owner_id=quiz.owner_id,
+        status=quiz.status,
+        title=quiz.title,
+        exercises=[
+            (ExercisePublic.model_validate(exercise), pos) for exercise, pos in db_exercises
+        ],
+    )
+    return response
+
+
+@router.post("/{id}/submit", response_model=QuizPublic)
+async def submit_quiz(
+    session: SessionDep,
+    current_user: CurrentUser,
+    id: str,
+    answers: SubmitAnswer,
+) -> Any:
+    """
+    Submit a quiz by setting its status to submitted.
+    """
+    quiz = await session.get(Quiz, id)
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    if current_user.id != quiz.owner_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to submit this quiz.",
+        )
+    
+    statement = (
+        select(Exercise, QuizExercise)
+        .join(QuizExercise)
+        .where(QuizExercise.quiz_id == id)
+    )
+    exercise_data = (await session.exec(statement)).all()
+
+    # making maps for easy access
+    solution_map ={ex.exercise_id: ex.solution for ex, quiz_ex in exercise_data}
+
+    exercise_map ={ex.exercise_id: quiz_ex for ex, quiz_ex in exercise_data}
+
+    for answer in answers.response:
+        exercise_id = answer["exercise_id"]
+        if exercise_id in solution_map:
+            quiz_exercise = exercise_map[exercise_id]
+            correct = answer["answer"].strip() == solution_map[exercise_id].strip()
+
+            # Update correctness
+            quiz_exercise.is_correct = correct
+            session.add(quiz_exercise)
+    quiz.status = QuizStatusChoices.SUBMITTED.value
+    session.add(quiz)
+    await session.commit()
+    await session.refresh(quiz)
+    return Message(message="Quiz submitted successfully")
+
