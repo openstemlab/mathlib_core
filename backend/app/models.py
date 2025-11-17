@@ -505,3 +505,17 @@ class SubmitAnswer(SQLModel):
     """
 
     response: list[dict[str, str]] #[{"exercise_id": str, "answer": str}, ...]
+
+
+class StartQuizRequest(SQLModel):
+    """Model for starting a new quiz.
+
+    Attributes:
+        tags: List of tags to filter exercises.
+        length: Number of exercises in the quiz.
+        title: Optional title for the quiz.
+    """
+
+    tags: list[str] = Field(default_factory=list)
+    length: int = 5
+    title: str | None = Field(default=None, max_length=255)
