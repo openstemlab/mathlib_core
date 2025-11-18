@@ -16,7 +16,7 @@ pytestmark = pytest.mark.asyncio(loop_scope="module")
 
 
 async def test_create_exercise(
-    client: httpx.AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: httpx.AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
     """Checks if exercise is created properly."""
 
@@ -26,7 +26,7 @@ async def test_create_exercise(
         "text": "What is 2 + 2?",
         "solution": "4",
     }
-    response = await client.post(
+    response = await client_with_test_db.post(
         f"{settings.API_V1_STR}/exercises/",
         headers=superuser_token_headers,
         json=data,
@@ -41,7 +41,7 @@ async def test_create_exercise(
 
 
 async def test_create_exercise_not_enough_permissions(
-    client: httpx.AsyncClient, normal_user_token_headers: dict[str, str]
+    client_with_test_db: httpx.AsyncClient, normal_user_token_headers: dict[str, str]
 ) -> None:
     """Checks that exercise cant be created by normal user."""
 
@@ -51,7 +51,7 @@ async def test_create_exercise_not_enough_permissions(
         "text": "What is 2 + 2?",
         "solution": "4",
     }
-    response = await client.post(
+    response = await client_with_test_db.post(
         f"{settings.API_V1_STR}/exercises/",
         headers=normal_user_token_headers,
         json=data,
@@ -62,13 +62,13 @@ async def test_create_exercise_not_enough_permissions(
 
 
 async def test_read_exercise(
-    client: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     """Checks if exercise is read properly."""
 
     exercise = await create_random_exercise(db)
 
-    response = await client.get(
+    response = await client_with_test_db.get(
         f"{settings.API_V1_STR}/exercises/{exercise.id}",
         headers=normal_user_token_headers,
     )
@@ -85,11 +85,11 @@ async def test_read_exercise(
 
 
 async def test_read_exercise_not_found(
-    client: httpx.AsyncClient, normal_user_token_headers: dict[str, str]
+    client_with_test_db: httpx.AsyncClient, normal_user_token_headers: dict[str, str]
 ) -> None:
     """Checks that nonexistant exercise returns 404."""
 
-    response = await client.get(
+    response = await client_with_test_db.get(
         f"{settings.API_V1_STR}/exercises/{uuid7str()}",
         headers=normal_user_token_headers,
     )
@@ -99,13 +99,13 @@ async def test_read_exercise_not_found(
 
 
 async def test_read_exercises(
-    client: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     """Checks if list of exercises is returned properly."""
 
     await create_random_exercise(db)
     await create_random_exercise(db)
-    response = await client.get(
+    response = await client_with_test_db.get(
         f"{settings.API_V1_STR}/exercises/",
         headers=normal_user_token_headers,
     )
@@ -115,7 +115,7 @@ async def test_read_exercises(
 
 
 async def test_update_exercise(
-    client: httpx.AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     """Checks if exercise is updated properly."""
 
@@ -133,7 +133,7 @@ async def test_update_exercise(
         "solution": "6",
         "tags": tags,
     }
-    response = await client.put(
+    response = await client_with_test_db.put(
         f"{settings.API_V1_STR}/exercises/{str(exercise.id)}",
         headers=superuser_token_headers,
         json=data,
@@ -151,7 +151,7 @@ async def test_update_exercise(
 
 
 async def test_update_exercise_not_found(
-    client: httpx.AsyncClient, superuser_token_headers: dict[str, str],
+    client_with_test_db: httpx.AsyncClient, superuser_token_headers: dict[str, str],
 ) -> None:
     """Checks that nonexistent exercise cant be updated and returns 404."""
 
@@ -166,7 +166,7 @@ async def test_update_exercise_not_found(
         "solution": "6",
         "tags": tags,
     }
-    response = await client.put(
+    response = await client_with_test_db.put(
         f"{settings.API_V1_STR}/exercises/{uuid7str()}",
         headers=superuser_token_headers,
         json=data,
@@ -177,7 +177,7 @@ async def test_update_exercise_not_found(
 
 
 async def test_update_exercise_not_enough_permissions(
-    client: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     """Checks that normal users cant change exercises."""
 
@@ -193,7 +193,7 @@ async def test_update_exercise_not_enough_permissions(
         "solution": "6",
         "tags": tags,
     }
-    response = await client.put(
+    response = await client_with_test_db.put(
         f"{settings.API_V1_STR}/exercises/{exercise.id}",
         headers=normal_user_token_headers,
         json=data,
@@ -204,12 +204,12 @@ async def test_update_exercise_not_enough_permissions(
 
 
 async def test_delete_exercise(
-    client: httpx.AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     """Checks that exercises can be deleted properly."""
 
     exercise = await create_random_exercise(db)
-    response = await client.delete(
+    response = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/exercises/{exercise.id}",
         headers=superuser_token_headers,
     )
@@ -219,11 +219,11 @@ async def test_delete_exercise(
 
 
 async def test_delete_exercise_not_found(
-    client: httpx.AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: httpx.AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
     """Checks that nonexistent exercise cant be deleted."""
 
-    response = await client.delete(
+    response = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/exercises/{uuid7str()}",
         headers=superuser_token_headers,
     )
@@ -233,12 +233,12 @@ async def test_delete_exercise_not_found(
 
 
 async def test_delete_exercise_not_enough_permissions(
-    client: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     """Checks that normal users cant delete exercises."""
     
     exercise = await create_random_exercise(db)
-    response = await client.delete(
+    response = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/exercises/{exercise.id}",
         headers=normal_user_token_headers,
     )

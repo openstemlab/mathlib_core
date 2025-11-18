@@ -101,7 +101,7 @@ async def create_quiz_route(
             quiz_in=quiz_in,
             session=session,
             owner_id=user_id,
-        )
+        )        
         return Message(message="Quiz created successfully")
     else:
         raise HTTPException(
@@ -165,6 +165,7 @@ async def start_quiz_route(
     Start a a new quiz.
     """
     quiz =  await start_new_quiz(quiz_data=quiz_data, session=session, owner_id=current_user.id)
+
     return quiz
 
 

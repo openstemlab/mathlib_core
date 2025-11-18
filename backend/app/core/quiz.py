@@ -61,20 +61,13 @@ async def form_quiz(
         # refreshing position for each exercise
         quiz_exercise = quiz.exercises[-1].link
         quiz_exercise.position = position
+        session.add(quiz_exercise)
 
     session.add(quiz)
     await session.flush()
     await session.refresh(quiz, ["exercises"])
 
-    quiz_public = QuizPublic(
-        id=quiz.id,
-        owner_id=quiz.owner_id,
-        status=quiz.status,
-        title=quiz.title,
-        exercises=[(ExercisePublic.model_validate(ex), ex.link.position) for ex in quiz.exercises]
-    )
-
-    return quiz_public
+    return quiz
 
 async def deactivate_quizzes(owner_id: str, session: AsyncSession) -> None:
     """
@@ -94,6 +87,7 @@ async def deactivate_quizzes(owner_id: str, session: AsyncSession) -> None:
         quiz.status = "in_progress"
         session.add(quiz)
 
+    await session.flush()
     await session.commit()
 
 
@@ -115,11 +109,13 @@ async def get_quiz_by_id(
     )
     quiz = (await session.exec(statement)).first()
     if quiz:
-        response = QuizPublic.model_validate(id=quiz.id,
-                                        owner_id=quiz.owner_id,
-                                        status=quiz.status,
-                                        exercises=[(ExercisePublic.model_validate(ex), ex.link.position) for ex in quiz.exercises],
-                                        title=quiz.title)
+        response = QuizPublic(
+            id=quiz.id,
+            owner_id=quiz.owner_id,
+            status=quiz.status,
+            exercises=[(ExercisePublic.model_validate(ex), ex.link.position) for ex in quiz.exercises],
+            title=quiz.title
+            )
         return response
     return None
 
@@ -144,7 +140,7 @@ async def get_all_quizzes_by_owner(
 
     quiz_public_list = []
     for quiz in quizzes:
-        quiz_public = QuizPublic.model_validate(
+        quiz_public = QuizPublic(
             id=quiz.id,
             owner_id=quiz.owner_id,
             status=quiz.status,
@@ -167,11 +163,11 @@ async def create_quiz(
     :param session: The database session.
     :return: The created Quiz object.
     """
-    data = Quiz.model_dump(quiz_in)
+    data = QuizCreate.model_dump(quiz_in)
     statement = select(User).where(User.id == owner_id)
     owner = (await session.exec(statement)).first()
 
-    exercise_ids = [ex for ex, _ in quiz_in.exercises]
+    exercise_ids = [ex for ex, _ in quiz_in.exercise_positions]
     exercises = []
     if exercise_ids:
         exercise_statement = select(Exercise).where(Exercise.id.in_(exercise_ids))
@@ -184,12 +180,20 @@ async def create_quiz(
         title=data.get("title"),
         exercises=exercises,
     )
-
-    positions = [pos for _, pos in quiz_in.exercises]
-    for exercise, position in zip(db_quiz.exercises, positions):
-        exercise.link.position = position
-        session.add(exercise)
     session.add(db_quiz)
+    await session.flush()
+    
+    positions = [pos for _, pos in quiz_in.exercise_positions]
+
+    for exercise, position in zip(exercises, positions):
+        statement = select(QuizExercise).where(
+            QuizExercise.quiz_id == db_quiz.id, 
+            QuizExercise.exercise_id == exercise.id
+            )
+        quiz_exercise = (await session.exec(statement)).first()
+        quiz_exercise.position = position
+        session.add(quiz_exercise)
+
     await session.flush()
     await session.refresh(db_quiz)
 
@@ -214,10 +218,10 @@ async def update_quiz(quiz_id: str, quiz_in: QuizUpdate, session: AsyncSession) 
         setattr(db_quiz, field, value)
 
     session.add(db_quiz)
-    await session.commit()
+    await session.flush()
     await session.refresh(db_quiz)
 
-    quiz_public = QuizPublic.model_validate(
+    quiz_public = QuizPublic(
         id=db_quiz.id,
         owner_id=db_quiz.owner_id,
         status=db_quiz.status,
@@ -242,7 +246,6 @@ async def delete_quiz(quiz_id: str, session: AsyncSession) -> bool:
         return False
 
     await session.delete(db_quiz)
-    await session.commit()
     return True
 
 
@@ -260,7 +263,8 @@ async def start_new_quiz(quiz_data: StartQuizRequest, session: AsyncSession, own
     quiz.status = QuizStatusChoices.ACTIVE.value
 
     session.add(quiz)
-    await session.commit()
+    await session.flush()
+
     await session.refresh(quiz)
 
     statement = (
@@ -271,7 +275,7 @@ async def start_new_quiz(quiz_data: StartQuizRequest, session: AsyncSession, own
     )
     result = await session.exec(statement)
     exercise_data = result.all()
-    exercises = [ExercisePublic.model_validate(ex) for ex, pos in exercise_data]
+    exercises = [(ExercisePublic.model_validate(ex), pos) for ex, pos in exercise_data]
     
     return QuizPublic(
         id=quiz.id,

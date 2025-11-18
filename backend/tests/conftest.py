@@ -4,6 +4,7 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.api.deps import get_db
 from app.core.config import settings
 from app.core.db import async_engine, init_db
 from app.main import app
@@ -38,3 +39,16 @@ async def normal_user_token_headers(client: AsyncClient, db: AsyncSession) -> di
     return await authentication_token_from_email(
         client=client, email=settings.EMAIL_TEST_USER, db=db
     )
+
+
+@pytest_asyncio.fixture(scope="function")
+async def client_with_test_db(db: AsyncSession, client: AsyncClient) -> AsyncGenerator[AsyncClient, None]:
+    """
+    Wraps the client and overrides the DB session to use the test session.
+    """
+    async def _override_get_session():
+        yield db  # Reuse the same session
+
+    app.dependency_overrides[get_db] = _override_get_session
+    yield client
+    app.dependency_overrides.clear()
