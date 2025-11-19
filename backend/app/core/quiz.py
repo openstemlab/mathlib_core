@@ -1,11 +1,12 @@
 
 import random
 from uuid_extensions import uuid7str
-from sqlmodel import  select
+from sqlmodel import  select, func
 from sqlalchemy import cast, String, or_
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
+from fastapi import HTTPException
 
 from app.models import (
     Exercise, 
@@ -15,7 +16,8 @@ from app.models import (
     QuizCreate, 
     QuizUpdate,
     QuizStatusChoices,
-    QuizExercise, 
+    QuizExercise,
+    QuizExerciseData, 
     User,
     StartQuizRequest,
     SubmitAnswer,
@@ -24,23 +26,37 @@ from app.models import (
 
 async def form_quiz(
     length: int,
-    tags: list[str],
+    tags: list[str]|None,
     owner_id: str,
-    title: str | None,
     session: AsyncSession,
-) -> QuizPublic:
+    title: str | None = None,
+) -> Quiz:
     """
     Form a quiz by selecting exercises based on the provided tags and populate a Quiz model.
+    If no tags provided, fills it with random exercises.
 
-    :param length: The number of exercises to include in the quiz.
-    :param tags: A list of TagPublic objects to filter exercises.
+    :param length: The number of exercises to include in the quiz. If zero or negative, an empty quiz is created.
+    :param tags: A list of tags to filter exercises.
     :param owner_id: The ID of the user owning the quiz.
     :param session: The database session.
-    :return: A QuizPublic object representing the created quiz.
+    :param title: Optional title for the quiz.
+    :return: A Quiz object representing the created quiz.
+    :raises HTTPException: If the owner user does not exist. 
     """
 
-    statement = select(Exercise).where(
-    or_(*[Exercise.tags.op('?')(tag) for tag in tags])).limit(length)
+    user_exists = await session.get(User, owner_id)
+    if not user_exists:
+        raise HTTPException(404, "Owner not found")
+    
+    if length <= 0:
+        return Quiz(owner_id=owner_id, title=title, status="new", exercises=[])
+
+    if tags:
+        statement = select(Exercise).where(
+        or_(*[Exercise.tags.op('?')(tag) for tag in tags])).limit(length)
+    else:
+        statement = select(Exercise).order_by(func.random()).limit(length)
+    
     exercises = (await session.exec(statement)).all()
 
     if len(exercises) < length:
@@ -55,19 +71,25 @@ async def form_quiz(
         status="new",
     )
 
+    session.add(quiz)
+    await session.flush()
+
     # adding exercises and positions to the quiz using link model
     for exercise, position in zip(exercises, positions):
-        quiz.exercises.append(exercise)
-        # refreshing position for each exercise
-        quiz_exercise = quiz.exercises[-1].link
-        quiz_exercise.position = position
+
+        quiz_exercise = QuizExercise(
+            quiz_id=quiz.id,
+            exercise_id=exercise.id,
+            position=position,
+        )
+
         session.add(quiz_exercise)
 
-    session.add(quiz)
     await session.flush()
     await session.refresh(quiz, ["exercises"])
 
     return quiz
+
 
 async def deactivate_quizzes(owner_id: str, session: AsyncSession) -> None:
     """
@@ -84,11 +106,11 @@ async def deactivate_quizzes(owner_id: str, session: AsyncSession) -> None:
     active_quizzes = (await session.exec(statement)).all()
 
     for quiz in active_quizzes:
-        quiz.status = "in_progress"
+        quiz.status = QuizStatusChoices.IN_PROGRESS.value
         session.add(quiz)
 
     await session.flush()
-    await session.commit()
+    await session.refresh_all(active_quizzes)
 
 
 async def get_quiz_by_id(
@@ -113,7 +135,7 @@ async def get_quiz_by_id(
             id=quiz.id,
             owner_id=quiz.owner_id,
             status=quiz.status,
-            exercises=[(ExercisePublic.model_validate(ex), ex.link.position) for ex in quiz.exercises],
+            exercises=[QuizExerciseData(exercise=ex, position=ex.link.position) for ex in quiz.exercises],
             title=quiz.title
             )
         return response
@@ -144,7 +166,7 @@ async def get_all_quizzes_by_owner(
             id=quiz.id,
             owner_id=quiz.owner_id,
             status=quiz.status,
-            exercises=[(ExercisePublic.model_validate(ex), ex.link.position) for ex in quiz.exercises],
+            exercises=[QuizExerciseData(exercise=ex, position=ex.link.position) for ex in quiz.exercises],
             title=quiz.title
         )
         quiz_public_list.append(quiz_public)
@@ -225,7 +247,7 @@ async def update_quiz(quiz_id: str, quiz_in: QuizUpdate, session: AsyncSession) 
         id=db_quiz.id,
         owner_id=db_quiz.owner_id,
         status=db_quiz.status,
-        exercises=[(ExercisePublic.model_validate(ex), ex.link.position) for ex in db_quiz.exercises],
+        exercises=[QuizExerciseData(exercise=ex, position=ex.link.position) for ex in db_quiz.exercises],
         title=db_quiz.title
     )
 
@@ -250,6 +272,14 @@ async def delete_quiz(quiz_id: str, session: AsyncSession) -> bool:
 
 
 async def start_new_quiz(quiz_data: StartQuizRequest, session: AsyncSession, owner_id: str) -> QuizPublic:
+    """Start a new quiz for a user, deactivating any existing active quizzes.
+
+    :param quiz_data: Data required to start the quiz.
+    :param session: The database session.
+    :param owner_id: The ID of the user starting the quiz.
+    :returns: QuizPublic - public representation of the started quiz.
+    """
+    # Creating quiz in the database with given parameters
     quiz = await form_quiz(
         length=quiz_data.length,
         tags=quiz_data.tags,
@@ -258,8 +288,9 @@ async def start_new_quiz(quiz_data: StartQuizRequest, session: AsyncSession, own
         session=session,
         )
 
+    # Deactivating any existing active quizzes for the user
     await deactivate_quizzes(owner_id=owner_id, session=session)
-    
+    # Setting the new quiz status to active
     quiz.status = QuizStatusChoices.ACTIVE.value
 
     session.add(quiz)
@@ -267,6 +298,7 @@ async def start_new_quiz(quiz_data: StartQuizRequest, session: AsyncSession, own
 
     await session.refresh(quiz)
 
+    # Coverting to QuizPublic format
     statement = (
         select(Exercise, QuizExercise.position)
         .join(QuizExercise)
@@ -275,7 +307,7 @@ async def start_new_quiz(quiz_data: StartQuizRequest, session: AsyncSession, own
     )
     result = await session.exec(statement)
     exercise_data = result.all()
-    exercises = [(ExercisePublic.model_validate(ex), pos) for ex, pos in exercise_data]
+    exercises = [QuizExerciseData(exercise=ex, position=pos) for ex, pos in exercise_data]
     
     return QuizPublic(
         id=quiz.id,
@@ -287,6 +319,12 @@ async def start_new_quiz(quiz_data: StartQuizRequest, session: AsyncSession, own
 
 
 async def save_quiz_progress(session: AsyncSession, quiz: Quiz, answers: SubmitAnswer) -> QuizPublic:
+    """Save the progress of an active quiz without submitting it.
+    :param session: The database session.
+    :param quiz: The Quiz object being progressed.
+    :param answers: The answers provided so far.
+    :returns: QuizPublic - public representation of the quiz with saved progress.
+    """
     # pulling exercises linked to the quiz
     statement = (
         select(Exercise, QuizExercise)
@@ -317,6 +355,11 @@ async def save_quiz_progress(session: AsyncSession, quiz: Quiz, answers: SubmitA
 
 
 async def load_active_quiz(session: AsyncSession, owner_id: str) -> QuizPublic | None:
+    """Load the active quiz for a user.
+    :param session: The database session.
+    :param owner_id: The ID of the user whose active quiz is to be loaded.
+    :returns: QuizPublic - public representation of the active quiz, or None if not found.
+    """
     statement = (
         select(Quiz)
         .where(Quiz.owner_id == owner_id, Quiz.status == QuizStatusChoices.ACTIVE.value)
@@ -324,16 +367,24 @@ async def load_active_quiz(session: AsyncSession, owner_id: str) -> QuizPublic |
     )
     quiz = (await session.exec(statement)).first()
     if quiz:
-        response = QuizPublic.model_validate(id=quiz.id,
-                                        owner_id=quiz.owner_id,
-                                        status=quiz.status,
-                                        exercises=[(ExercisePublic.model_validate(ex), ex.link.position) for ex in quiz.exercises],
-                                        title=quiz.title)
+        response = QuizPublic.model_validate(
+            id=quiz.id,
+            owner_id=quiz.owner_id,
+            status=quiz.status,
+            exercises=[QuizExerciseData(exercise=ex, position=ex.link.position) for ex in quiz.exercises],
+            title=quiz.title,
+            )
         return response
     return None
 
 
 async def submit_quiz(session: AsyncSession, quiz: Quiz, answers: SubmitAnswer):
+    """Finalize and submit the quiz, marking it as submitted.
+
+    :param session: The database session.
+    :param quiz: The Quiz object being submitted.
+    :param answers: The final answers provided.
+    """
     statement = (
         select(Exercise, QuizExercise)
         .join(QuizExercise)
@@ -359,4 +410,5 @@ async def submit_quiz(session: AsyncSession, quiz: Quiz, answers: SubmitAnswer):
     session.add(quiz)
     await session.flush()
     await session.refresh(quiz)
+
 

@@ -469,6 +469,17 @@ class Quiz(QuizBase, table=True):
     )
 
 
+class QuizExerciseData(SQLModel):
+    """Model representing an exercise within a quiz along with its position.
+
+    Attributes:
+        exercise: ExercisePublic object representing the exercise.
+        position: Position of the exercise in the quiz.
+    """
+
+    exercise: ExercisePublic
+    position: int
+
 class QuizPublic(QuizBase):
     """Public representation of a Quiz. Inherits for QuizBase.
 
@@ -480,7 +491,7 @@ class QuizPublic(QuizBase):
 
     id: str
     owner_id: str
-    exercises: list[tuple[ExercisePublic, int]] # list of (exercise, position)
+    exercises: list[QuizExerciseData] # list of {"exercise": ExercisePublic, "position": int}
     status: str
 
 
@@ -516,6 +527,6 @@ class StartQuizRequest(SQLModel):
         title: Optional title for the quiz.
     """
 
-    tags: list[str] = Field(default_factory=list)
+    tags: list[str]|None = Field(default_factory=list)
     length: int = 5
     title: str | None = Field(default=None, max_length=255)

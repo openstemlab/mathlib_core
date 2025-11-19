@@ -237,7 +237,9 @@ async def submit_quiz_route(
             status_code=403,
             detail="You do not have permission to submit this quiz.",
         )
-    
-    await submit_quiz(session=session, quiz=quiz, answers=answers)
-    return Message(message="Quiz submitted successfully")
+    try:
+        await submit_quiz(session=session, quiz=quiz, answers=answers)
+        return Message(message="Quiz submitted successfully")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 

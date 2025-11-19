@@ -4,14 +4,15 @@ from app.models import Exercise
 from tests.utils.utils import random_lower_string
 
 
-async def create_random_exercise(db: AsyncSession) -> Exercise:
+async def create_random_exercise(db: AsyncSession, tags=None) -> Exercise:
     """Creates a randomised exercise."""
+    if tags is None:
+        tags = [random_lower_string()]
 
     source_name = random_lower_string()
     source_id = random_lower_string()
     text = random_lower_string()
     solution = random_lower_string()
-    tags=[random_lower_string()]
     exercise = Exercise(
         source_name=source_name,
         source_id=source_id,

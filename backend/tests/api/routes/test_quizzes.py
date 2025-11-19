@@ -13,7 +13,7 @@ from app.core.config import settings
 from tests.utils.user import create_random_user, user_authentication_headers
 from tests.utils.quiz import create_random_quiz
 from tests.utils.exercise import create_random_exercise
-from app.models import ExercisePublic, Quiz, QuizCreate, QuizPublic, QuizStatusChoices, User, StartQuizRequest
+from app.models import ExercisePublic, Quiz, QuizCreate, QuizPublic, QuizStatusChoices, QuizExerciseData,User, StartQuizRequest
 
 
 pytestmark = pytest.mark.asyncio(loop_scope="module")
@@ -415,11 +415,10 @@ async def test_start_quiz(
         status=QuizStatusChoices.ACTIVE.value,
         title=quiz_title,
         exercises=[
-            (exercise_public_1, 0),
-            (exercise_public_2, 1),
+            QuizExerciseData(exercise=exercise_public_1, position=0),
+            QuizExerciseData(exercise=exercise_public_2, position=1),
         ],
     )
-
     mock_start_new_quiz.return_value = quiz_public
 
         # Act
