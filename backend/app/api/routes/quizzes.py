@@ -224,6 +224,7 @@ async def submit_quiz_route(
     session: SessionDep,
     current_user: CurrentUser,
     answers: SubmitAnswer,
+    id: str,
 ) -> Any:
     """
     Submit a quiz by setting its status to submitted.

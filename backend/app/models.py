@@ -279,6 +279,8 @@ class QuizExercise(SQLModel, table=True):
         primary_key=True,
         ondelete="CASCADE",
     )
+    quiz: "Quiz" = Relationship(back_populates="quiz_exercises")
+    exercise: "Exercise" = Relationship(back_populates="quiz_exercises")
     position: int = 0
     is_correct: bool|None = None 
 
@@ -299,7 +301,6 @@ class ExerciseBase(SQLModel):
     source_name: str = Field(max_length=255)
     source_id: str = Field(max_length=255)
     text: str
-    solution: str
     answers: list[str] = Field(default_factory=list)
     illustration: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
@@ -309,8 +310,7 @@ class ExerciseCreate(ExerciseBase):
     """
     Model for creating a new exercise.
     """
-
-    pass
+    solution: str
 
 
 class ExerciseUpdate(ExerciseBase):
@@ -359,16 +359,30 @@ class Exercise(ExerciseBase, table=True):
     quizzes: list["Quiz"] = Relationship(
         back_populates="exercises", 
         link_model=QuizExercise, 
-        sa_relationship_kwargs={'lazy': 'selectin'},
+        sa_relationship_kwargs={
+            'lazy': 'selectin',
+            'cascade': 'all, delete',          # ORM cascade
+            'passive_deletes': True,           # Trust DB to handle deletes
+            'overlaps':'quiz'
+            },
     )
-
+    quiz_exercises: list["QuizExercise"] = Relationship(
+        back_populates="exercise",
+        sa_relationship_kwargs={
+            'cascade': 'all, delete',
+            'passive_deletes': True,
+            'overlaps':'quizzes'
+        })
+    solution: str
 
 class ExercisePublic(ExerciseBase):
     """Public representation of Exercise for API responses. Inherits from ExerciseBase.
 
     Attributes:
         id: Unique identifier for the exercise.
-        tags: list of Tag objects representing tags for the exercise
+        illustration: list of illustrations for the exercise
+        answers: list of answers for the exercise
+        tags: list of strings representing tags for the exercise
     """
 
     id: str
@@ -414,10 +428,7 @@ class QuizCreate(QuizBase):
     Attributes:
         is_active: Flag indicating whether the quiz is active.
     """
-    exercise_positions: list[tuple[str, int]] = Field(
-        default_factory=list,
-        description="List of tuples containing (exercise_id, position)"
-    )
+    exercise_positions: list[QuizExerciseData] = Field(default_factory=list)
 
 
 
@@ -425,15 +436,14 @@ class QuizUpdate(QuizBase):
     """Model for updating a quiz via API endpoints. Inherits from QuizBase.
     
     Atributes:
-        is_active: Optional. Flag indicating whether the quiz is active.
+        status: Optional, status of the quiz.
+        title: Optional, title of the quiz.
+        exercise_positions: Optional list of QuizExerciseData representing exercises and their positions.
     """
 
-    status: QuizStatusChoices | None = QuizStatusChoices.ACTIVE.value
+    status: QuizStatusChoices | None = None
     title: str | None = Field(default=None, max_length=255)
-    exercise_positions: list[tuple[str, int]]|None = Field(
-        default_factory=list,
-        description="List of tuples containing (exercise_id, position)"
-    )
+    exercise_positions: list[QuizExerciseData]|None = None
 
 
 class Quiz(QuizBase, table=True):
@@ -453,7 +463,12 @@ class Quiz(QuizBase, table=True):
     exercises: list["Exercise"] = Relationship(
         back_populates="quizzes", 
         link_model=QuizExercise,
-        sa_relationship_kwargs={'lazy': 'selectin'},
+        sa_relationship_kwargs={
+            'lazy': 'selectin',
+            'cascade': 'all, delete',
+            'passive_deletes': True,
+            'overlaps':'exercise,quiz_exercises',
+            },
     )
     status: str = Field(
         default=QuizStatusChoices.NEW.value,
@@ -467,9 +482,27 @@ class Quiz(QuizBase, table=True):
             nullable=False,
         )
     )
+    quiz_exercises: list["QuizExercise"] = Relationship(
+        back_populates="quiz",
+        sa_relationship_kwargs={
+            'lazy': 'selectin',
+            'overlaps':'exercises,quizzes'},
+    )
 
 
 class QuizExerciseData(SQLModel):
+    """Model representing an exercise within a quiz along with its position.
+
+    Attributes:
+        exercise: Exercise object.
+        position: Position of the exercise in the quiz.
+    """
+
+    exercise: Exercise
+    position: int
+
+
+class QuizExerciseDataPublic(SQLModel):
     """Model representing an exercise within a quiz along with its position.
 
     Attributes:
@@ -491,7 +524,7 @@ class QuizPublic(QuizBase):
 
     id: str
     owner_id: str
-    exercises: list[QuizExerciseData] # list of {"exercise": ExercisePublic, "position": int}
+    exercises: list[QuizExerciseDataPublic] # list of {"exercise": ExercisePublic, "position": int}
     status: str
 
 
@@ -515,7 +548,7 @@ class SubmitAnswer(SQLModel):
         answer: Submitted answer string.
     """
 
-    response: list[dict[str, str]] #[{"exercise_id": str, "answer": str}, ...]
+    response: list[dict[str, str|None]] #[{"exercise_id": str, "answer": str}, ...]
 
 
 class StartQuizRequest(SQLModel):

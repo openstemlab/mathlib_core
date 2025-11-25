@@ -1,8 +1,9 @@
 
 import random
+import logging
 from uuid_extensions import uuid7str
 from sqlmodel import  select, func
-from sqlalchemy import cast, String, or_
+from sqlalchemy import cast, String, or_, update
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -17,12 +18,13 @@ from app.models import (
     QuizUpdate,
     QuizStatusChoices,
     QuizExercise,
-    QuizExerciseData, 
+    QuizExerciseDataPublic, 
     User,
     StartQuizRequest,
     SubmitAnswer,
 )
 
+logger = logging.getLogger(__name__)
 
 async def form_quiz(
     length: int,
@@ -41,12 +43,8 @@ async def form_quiz(
     :param session: The database session.
     :param title: Optional title for the quiz.
     :return: A Quiz object representing the created quiz.
-    :raises HTTPException: If the owner user does not exist. 
     """
 
-    user_exists = await session.get(User, owner_id)
-    if not user_exists:
-        raise HTTPException(404, "Owner not found")
     
     if length <= 0:
         return Quiz(owner_id=owner_id, title=title, status="new", exercises=[])
@@ -98,19 +96,15 @@ async def deactivate_quizzes(owner_id: str, session: AsyncSession) -> None:
     :param owner_id: The ID of the user whose quizzes are to be deactivated.
     :param session: The database session.
     """
+
     statement = (
-        select(Quiz)
-        .where(Quiz.owner_id == owner_id, Quiz.status == "active")
-        .with_for_update()  # Prevent concurrent modifications
+        update(Quiz)
+        .where(Quiz.owner_id == owner_id, Quiz.status == QuizStatusChoices.ACTIVE.value)
+        .values(status=QuizStatusChoices.IN_PROGRESS.value)
     )
-    active_quizzes = (await session.exec(statement)).all()
-
-    for quiz in active_quizzes:
-        quiz.status = QuizStatusChoices.IN_PROGRESS.value
-        session.add(quiz)
-
+    await session.exec(statement)
     await session.flush()
-    await session.refresh_all(active_quizzes)
+
 
 
 async def get_quiz_by_id(
@@ -127,19 +121,32 @@ async def get_quiz_by_id(
     statement = (
         select(Quiz)
         .where(Quiz.id == quiz_id)
-        .options(selectinload(Quiz.exercises))  # Eager load exercises
+        .options(selectinload(Quiz.quiz_exercises).selectinload(QuizExercise.exercise))
     )
     quiz = (await session.exec(statement)).first()
-    if quiz:
-        response = QuizPublic(
-            id=quiz.id,
-            owner_id=quiz.owner_id,
-            status=quiz.status,
-            exercises=[QuizExerciseData(exercise=ex, position=ex.link.position) for ex in quiz.exercises],
-            title=quiz.title
-            )
-        return response
-    return None
+
+
+    if not quiz:
+        return None
+
+    exercises_data = [
+        QuizExerciseDataPublic(
+            exercise=ExercisePublic.model_validate(qe.exercise),
+            position=qe.position,
+        )
+        for qe in quiz.quiz_exercises
+    ]
+
+
+    response = QuizPublic(
+        id=quiz.id,
+        owner_id=quiz.owner_id,
+        status=quiz.status,
+        exercises=exercises_data,
+        title=quiz.title
+        )
+    return response
+
 
 
 async def get_all_quizzes_by_owner(
@@ -156,9 +163,11 @@ async def get_all_quizzes_by_owner(
     statement = (
         select(Quiz)
         .where(Quiz.owner_id == owner_id)
-        .options(selectinload(Quiz.exercises))  # Eager load exercises
+        .options(selectinload(Quiz.quiz_exercises).selectinload(QuizExercise.exercise))
+        .order_by(Quiz.id)
     )
-    quizzes = (await session.exec(statement)).all()
+    request = await session.exec(statement)
+    quizzes = request.all()
 
     quiz_public_list = []
     for quiz in quizzes:
@@ -166,7 +175,12 @@ async def get_all_quizzes_by_owner(
             id=quiz.id,
             owner_id=quiz.owner_id,
             status=quiz.status,
-            exercises=[QuizExerciseData(exercise=ex, position=ex.link.position) for ex in quiz.exercises],
+            exercises=[
+                QuizExerciseDataPublic(
+                    exercise=ExercisePublic.model_validate(qe.exercise),
+                    position=qe.position
+                    ) for qe in quiz.quiz_exercises
+                    ],
             title=quiz.title
         )
         quiz_public_list.append(quiz_public)
@@ -177,77 +191,134 @@ async def create_quiz(
     quiz_in: QuizCreate,
     session: AsyncSession,
     owner_id: str,
-) -> Quiz:
-    """
-    Create a new Quiz in the database.
+):
+    """Create a new Quiz in the database. Empty quizzes are allowed.
 
     :param quiz_in: The Quiz data to create.
     :param session: The database session.
-    :return: The created Quiz object.
+    :param owner_id: The ID of the user creating the quiz.
+    :raises ValueError: If any exercise IDs are duplicated or not found.
     """
-    data = QuizCreate.model_dump(quiz_in)
-    statement = select(User).where(User.id == owner_id)
-    owner = (await session.exec(statement)).first()
 
-    exercise_ids = [ex for ex, _ in quiz_in.exercise_positions]
-    exercises = []
-    if exercise_ids:
-        exercise_statement = select(Exercise).where(Exercise.id.in_(exercise_ids))
-        exercises = (await session.exec(exercise_statement)).all()
+    if quiz_in.exercise_positions:
+        # Detect duplicates
+        seen_ids = set()
+        for ex_pos in quiz_in.exercise_positions:
+            ex_id = ex_pos.exercise.id
+            if ex_id in seen_ids:
+                raise ValueError(f"Duplicate exercise ID in quiz: {ex_id}")
+            seen_ids.add(ex_id)
+        
+
+        # Fetch all exercises in one query
+        exercise_ids = [ex.exercise.id for ex in quiz_in.exercise_positions]
+        result = await session.exec(select(Exercise).where(Exercise.id.in_(exercise_ids)))
+        exercises = list(result.all())
+
+        # Fail fast: all exercises must exist
+        found_ids = {ex.id for ex in exercises}
+        missing = set(exercise_ids) - found_ids
+        if missing:
+            raise ValueError(f"Exercises not found in DB: {missing}")
+
+        # Build position map before reordering
+        position_map = {
+            ex.exercise.id: ex.position
+            for ex in quiz_in.exercise_positions
+    }
+    else:
+        exercises = []
+        position_map = {}
 
     db_quiz = Quiz(
         owner_id=owner_id,
-        owner=owner,
-        status=data.get("status", "new"),
-        title=data.get("title"),
-        exercises=exercises,
+        status=quiz_in.status or "new",
+        title=quiz_in.title,
     )
     session.add(db_quiz)
     await session.flush()
-    
-    positions = [pos for _, pos in quiz_in.exercise_positions]
 
-    for exercise, position in zip(exercises, positions):
-        statement = select(QuizExercise).where(
-            QuizExercise.quiz_id == db_quiz.id, 
-            QuizExercise.exercise_id == exercise.id
-            )
-        quiz_exercise = (await session.exec(statement)).first()
-        quiz_exercise.position = position
+    # Create links
+    for exercise in exercises:
+        quiz_exercise = QuizExercise(
+            quiz_id=db_quiz.id,
+            exercise_id=exercise.id,
+            position=position_map[exercise.id],
+        )
         session.add(quiz_exercise)
 
     await session.flush()
-    await session.refresh(db_quiz)
+
 
 
 async def update_quiz(quiz_id: str, quiz_in: QuizUpdate, session: AsyncSession) -> QuizPublic | None:
     """
-    Update an existing Quiz in the database.
+    Update an existing Quiz in the database. Exercises are replaced if provided, so empty list leads to empty quiz, add existing exercises to keep them.
 
     :param quiz_id: The ID of the Quiz to update.
-    :param quiz_in: The Quiz data to update.
+    :param quiz_in: The QuizUpdate object carrying update data.
     :param session: The database session.
     :return: The updated QuizPublic object if found, otherwise None.
     """
-    statement = select(Quiz).where(Quiz.id == quiz_id)
+    statement = (
+        select(Quiz)
+        .where(Quiz.id == quiz_id)
+        .options(
+            selectinload(Quiz.quiz_exercises)
+            .selectinload(QuizExercise.exercise)
+            )
+        )
     db_quiz = (await session.exec(statement)).first()
 
     if not db_quiz:
         return None
 
-    quiz_data = quiz_in.model_dump(exclude_unset=True)
-    for field, value in quiz_data.items():
-        setattr(db_quiz, field, value)
 
-    session.add(db_quiz)
-    await session.flush()
+    if quiz_in.status is not None:
+        db_quiz.status = quiz_in.status
+        session.add(db_quiz)
+        await session.flush()
+    if quiz_in.title is not None:
+        db_quiz.title = quiz_in.title
+        session.add(db_quiz)
+        await session.flush()
+
+
+    if "exercise_positions" in quiz_in.model_fields_set:
+        # Clear existing links
+        for link in db_quiz.quiz_exercises:
+            await session.delete(link)
+        await session.flush()
+
+        # Add new links
+        if quiz_in.exercise_positions is not None:
+            for ex_pos in quiz_in.exercise_positions:
+                quiz_exercise = QuizExercise(
+                    quiz_id=db_quiz.id,
+                    exercise_id=ex_pos.exercise.id,   #ex_pos is QuizExerciseData
+                    position=ex_pos.position,
+                )
+                session.add(quiz_exercise)
+
+            await session.flush()
+        await session.refresh(db_quiz, attribute_names=["quiz_exercises"])
+
+  
     await session.refresh(db_quiz)
+
+    exercises_data = [
+        QuizExerciseDataPublic(
+            exercise=ExercisePublic.model_validate(qe.exercise),
+            position=qe.position,
+        )
+        for qe in db_quiz.quiz_exercises
+    ]
 
     quiz_public = QuizPublic(
         id=db_quiz.id,
         owner_id=db_quiz.owner_id,
         status=db_quiz.status,
-        exercises=[QuizExerciseData(exercise=ex, position=ex.link.position) for ex in db_quiz.exercises],
+        exercises=exercises_data,
         title=db_quiz.title
     )
 
@@ -261,13 +332,13 @@ async def delete_quiz(quiz_id: str, session: AsyncSession) -> bool:
     :param session: The database session.
     :return: True if the Quiz was deleted, False if not found.
     """
-    statement = select(Quiz).where(Quiz.id == quiz_id)
-    db_quiz = (await session.exec(statement)).first()
+    db_quiz = await session.get(Quiz, quiz_id)
 
     if not db_quiz:
         return False
 
     await session.delete(db_quiz)
+    await session.flush()
     return True
 
 
@@ -279,6 +350,8 @@ async def start_new_quiz(quiz_data: StartQuizRequest, session: AsyncSession, own
     :param owner_id: The ID of the user starting the quiz.
     :returns: QuizPublic - public representation of the started quiz.
     """
+
+    await session.exec(select(User).where(User.id == owner_id).with_for_update())
     # Creating quiz in the database with given parameters
     quiz = await form_quiz(
         length=quiz_data.length,
@@ -307,7 +380,9 @@ async def start_new_quiz(quiz_data: StartQuizRequest, session: AsyncSession, own
     )
     result = await session.exec(statement)
     exercise_data = result.all()
-    exercises = [QuizExerciseData(exercise=ex, position=pos) for ex, pos in exercise_data]
+
+
+    exercises = [QuizExerciseDataPublic(exercise=ExercisePublic.model_validate(ex), position=pos) for ex, pos in exercise_data]
     
     return QuizPublic(
         id=quiz.id,
@@ -330,24 +405,33 @@ async def save_quiz_progress(session: AsyncSession, quiz: Quiz, answers: SubmitA
         select(Exercise, QuizExercise)
         .join(QuizExercise)
         .where(QuizExercise.quiz_id == quiz.id)
+        .order_by(QuizExercise.position)
     )
     exercise_data = (await session.exec(statement)).all()
 
     # making maps for easy access
-    solution_map ={ex.exercise_id: ex.solution for ex, quiz_ex in exercise_data}
+    solution_map ={ex.id: ex.solution for ex, quiz_ex in exercise_data}
 
-    exercise_map ={ex.exercise_id: quiz_ex for ex, quiz_ex in exercise_data}
+    exercise_map ={ex.id: quiz_ex for ex, quiz_ex in exercise_data}
 
     #checking answers, marking correctness
     for answer in answers.response:
-        exercise_id = answer["exercise_id"]
+        exercise_id = answer.get("exercise_id")
+        user_answer = answer.get("answer") or ""
+        if not exercise_id:
+            logger.warning("Missing exercise_id in answer: %s", answer)
         if exercise_id in solution_map:
             quiz_exercise = exercise_map[exercise_id]
-            correct = answer["answer"].strip() == solution_map[exercise_id].strip()
+            
+            correct = user_answer.strip() == solution_map[exercise_id].strip()
 
             # Update correctness
             quiz_exercise.is_correct = correct
             session.add(quiz_exercise)
+        else:
+            logger.warning("Exercise ID %s not found in quiz %s", exercise_id, quiz.id)
+        
+        
     quiz.status = QuizStatusChoices.ACTIVE.value
     session.add(quiz)
     await session.flush()
@@ -355,7 +439,8 @@ async def save_quiz_progress(session: AsyncSession, quiz: Quiz, answers: SubmitA
 
 
 async def load_active_quiz(session: AsyncSession, owner_id: str) -> QuizPublic | None:
-    """Load the active quiz for a user.
+    """Load the active quiz for a user. If no active quiz exists, returns None. If by chance there is more than 1 active quiz(shouldnt be) returns oldest one.
+
     :param session: The database session.
     :param owner_id: The ID of the user whose active quiz is to be loaded.
     :returns: QuizPublic - public representation of the active quiz, or None if not found.
@@ -363,19 +448,32 @@ async def load_active_quiz(session: AsyncSession, owner_id: str) -> QuizPublic |
     statement = (
         select(Quiz)
         .where(Quiz.owner_id == owner_id, Quiz.status == QuizStatusChoices.ACTIVE.value)
-        .options(selectinload(Quiz.exercises))  # Eager load exercises
+        .options(selectinload(Quiz.quiz_exercises).selectinload(QuizExercise.exercise))
+        .order_by(Quiz.id)  # Eager load exercises
     )
     quiz = (await session.exec(statement)).first()
-    if quiz:
-        response = QuizPublic.model_validate(
-            id=quiz.id,
-            owner_id=quiz.owner_id,
-            status=quiz.status,
-            exercises=[QuizExerciseData(exercise=ex, position=ex.link.position) for ex in quiz.exercises],
-            title=quiz.title,
-            )
-        return response
-    return None
+
+
+    if not quiz:
+        return None
+    
+    exercises_data = [
+        QuizExerciseDataPublic(
+            exercise=ExercisePublic.model_validate(qe.exercise),
+            position=qe.position,
+        )
+        for qe in quiz.quiz_exercises
+        ]
+    
+    response = QuizPublic(
+        id=quiz.id,
+        owner_id=quiz.owner_id,
+        status=quiz.status,
+        exercises=exercises_data,
+        title=quiz.title,
+        )
+    return response
+
 
 
 async def submit_quiz(session: AsyncSession, quiz: Quiz, answers: SubmitAnswer):
@@ -389,23 +487,29 @@ async def submit_quiz(session: AsyncSession, quiz: Quiz, answers: SubmitAnswer):
         select(Exercise, QuizExercise)
         .join(QuizExercise)
         .where(QuizExercise.quiz_id == quiz.id)
+        .order_by(QuizExercise.position)
     )
     exercise_data = (await session.exec(statement)).all()
 
     # making maps for easy access
-    solution_map ={ex.exercise_id: ex.solution for ex, quiz_ex in exercise_data}
+    solution_map ={ex.id: ex.solution for ex, quiz_ex in exercise_data}
 
-    exercise_map ={ex.exercise_id: quiz_ex for ex, quiz_ex in exercise_data}
+    exercise_map ={ex.id: quiz_ex for ex, quiz_ex in exercise_data}
 
     for answer in answers.response:
-        exercise_id = answer["exercise_id"]
+        exercise_id = answer.get("exercise_id")
+        user_answer = answer.get("answer") or ""
+        if not exercise_id:
+            logger.warning("Missing exercise_id in answer: %s", answer)
         if exercise_id in solution_map:
             quiz_exercise = exercise_map[exercise_id]
-            correct = answer["answer"].strip() == solution_map[exercise_id].strip()
+            
+            correct = user_answer.strip() == solution_map[exercise_id].strip()
 
-            # Update correctness
             quiz_exercise.is_correct = correct
             session.add(quiz_exercise)
+        else:
+            logger.warning("Exercise ID %s not found in quiz %s", exercise_id, quiz.id)
     quiz.status = QuizStatusChoices.SUBMITTED.value
     session.add(quiz)
     await session.flush()
