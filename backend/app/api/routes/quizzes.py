@@ -67,6 +67,29 @@ async def read_quizzes_route(
             detail="You do not have permission to access this resource.",
         )
 
+#reminder to myself - /load conflicts with /{id}, more specific endpoints should go first
+@router.get("/load", response_model=QuizPublic)
+async def load_quiz_route(
+    user_id: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    """
+    Load an active quiz.
+    """
+
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only load quizzes for yourself."
+        )
+    quiz = await load_active_quiz(session=session, owner_id=user_id)
+
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found.")
+
+    return quiz
+
 
 @router.get("/{id}", response_model=QuizPublic)
 async def read_quiz_route(
@@ -159,11 +182,23 @@ async def delete_quiz_route(
 async def start_quiz_route(
     session: SessionDep,
     current_user: CurrentUser,
+    user_id:str,
     quiz_data: StartQuizRequest,
 ) -> Any:
     """
     Start a a new quiz.
     """
+
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only start quizzes for yourself."
+        )
+    if quiz_data.length > 500:
+        raise HTTPException(
+            status_code=422,
+            detail="Quiz length cannot exceed 500."
+        )
     quiz =  await start_new_quiz(quiz_data=quiz_data, session=session, owner_id=current_user.id)
 
     return quiz
@@ -171,7 +206,7 @@ async def start_quiz_route(
 
 
 
-@router.put("/save", response_model=Message)
+@router.put("/{id}/save", response_model=Message)
 async def save_quiz_route(
     session: SessionDep,
     current_user: CurrentUser,
@@ -179,7 +214,7 @@ async def save_quiz_route(
     answers: SubmitAnswer,
 ) -> Any:
     """
-    Save an active quiz.
+    Save an active quiz. Only one active quiz can be saved at a time.
     """
     #assuming that the quiz already created by /quizzes/start endpoint
     quiz = await session.get(Quiz, id)
@@ -201,25 +236,9 @@ async def save_quiz_route(
     await save_quiz_progress(session=session, quiz=quiz, answers=answers)
     return Message(message="Quiz progress saved successfully")
 
-    
-
-@router.get("/load", response_model=QuizPublic)
-async def load_quiz_route(
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> Any:
-    """
-    Load an active quiz.
-    """
-    quiz = await load_active_quiz(session=session, owner_id=current_user.id)
-
-    if not quiz:
-        raise HTTPException(status_code=404, detail="Quiz not found")
-
-    return quiz
 
 
-@router.post("/submit", response_model=Message)
+@router.post("/{id}/submit", response_model=Message)
 async def submit_quiz_route(
     session: SessionDep,
     current_user: CurrentUser,
@@ -237,6 +256,11 @@ async def submit_quiz_route(
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to submit this quiz.",
+        )
+    if quiz.status != QuizStatusChoices.ACTIVE.value:
+        raise HTTPException(
+            status_code=400,
+            detail="Only active quizzes can be submitted."
         )
     try:
         await submit_quiz(session=session, quiz=quiz, answers=answers)

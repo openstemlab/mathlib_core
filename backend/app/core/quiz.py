@@ -90,8 +90,13 @@ async def form_quiz(
 
 
 async def deactivate_quizzes(owner_id: str, session: AsyncSession) -> None:
-    """
-    Deactivate all active quizzes for a given user by setting their status to 'in_progress'.
+    """Deactivate any currently active quizzes for the user.
+
+    This is used to ensure only one active quiz exists, even though 
+    the DB enforces this via constraint. It prevents IntegrityError 
+    during new quiz creation and provides clean state transitions.
+
+    Safe to call even if no active quizzes exist.
 
     :param owner_id: The ID of the user whose quizzes are to be deactivated.
     :param session: The database session.

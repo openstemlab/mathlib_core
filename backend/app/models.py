@@ -544,8 +544,7 @@ class SubmitAnswer(SQLModel):
     """Model for submitting an answer to a quiz exercise.
 
     Attributes:
-        exercise_id: Unique identifier for the exercise.
-        answer: Submitted answer string.
+        response: list of dicts with exercise_id and answer.
     """
 
     response: list[dict[str, str|None]] #[{"exercise_id": str, "answer": str}, ...]
