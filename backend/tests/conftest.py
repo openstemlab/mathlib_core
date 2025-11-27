@@ -14,7 +14,7 @@ from tests.utils.utils import get_superuser_token_headers
 
 
 @pytest_asyncio.fixture(scope="function")
-async def db() -> AsyncGenerator[AsyncSession,None]:
+async def db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSession(async_engine) as session:
         await init_db(session)
         await session.commit()
@@ -22,10 +22,11 @@ async def db() -> AsyncGenerator[AsyncSession,None]:
         await session.rollback()
 
 
-
 @pytest_asyncio.fixture(scope="function")
 async def client() -> AsyncGenerator[AsyncClient, None]:
-    async with AsyncClient(transport=ASGITransport(app=app),base_url="http://test") as c:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as c:
         yield c
 
 
@@ -35,17 +36,22 @@ async def superuser_token_headers(client: AsyncClient) -> dict[str, str]:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def normal_user_token_headers(client: AsyncClient, db: AsyncSession) -> dict[str, str]:
+async def normal_user_token_headers(
+    client: AsyncClient, db: AsyncSession
+) -> dict[str, str]:
     return await authentication_token_from_email(
         client=client, email=settings.EMAIL_TEST_USER, db=db
     )
 
 
 @pytest_asyncio.fixture(scope="function")
-async def client_with_test_db(db: AsyncSession, client: AsyncClient) -> AsyncGenerator[AsyncClient, None]:
+async def client_with_test_db(
+    db: AsyncSession, client: AsyncClient
+) -> AsyncGenerator[AsyncClient, None]:
     """
     Wraps the client and overrides the DB session to use the test session.
     """
+
     async def _override_get_session():
         yield db  # Reuse the same session
 

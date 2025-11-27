@@ -10,6 +10,7 @@ from app.models import User
 
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
+
 async def test_create_user(client: AsyncClient, db: AsyncSession) -> None:
     r = await client.post(
         f"{settings.API_V1_STR}/private/users/",

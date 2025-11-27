@@ -18,7 +18,7 @@ from app.models import (
 
 async def create_user(*, session: AsyncSession, user_create: UserCreate) -> User:
     """Function to create a user.
-    
+
     :param session: The SQLAlchemy session object.
     :param user_create: The user data to create a User.
     :returns: User object.
@@ -33,7 +33,9 @@ async def create_user(*, session: AsyncSession, user_create: UserCreate) -> User
     return db_obj
 
 
-async def update_user(*, session: AsyncSession, db_user: User, user_in: UserUpdate) -> Any:
+async def update_user(
+    *, session: AsyncSession, db_user: User, user_in: UserUpdate
+) -> Any:
     """Function to update a user.
 
     :param session: The SQLAlchemy session object.
@@ -57,7 +59,7 @@ async def update_user(*, session: AsyncSession, db_user: User, user_in: UserUpda
 
 async def get_user_by_email(*, session: AsyncSession, email: str) -> User | None:
     """Function to get a User object from database by email.
-    
+
     :param session: The SQLAlchemy session object
     :param email: email string.
     :returns: User object
@@ -68,9 +70,11 @@ async def get_user_by_email(*, session: AsyncSession, email: str) -> User | None
     return session_user.first()
 
 
-async def authenticate(*, session: AsyncSession, email: str, password: str) -> User | None:
+async def authenticate(
+    *, session: AsyncSession, email: str, password: str
+) -> User | None:
     """Function to get a user authentificated.
-    
+
     :param session: The SQLAlchemy session object.
     :param email: email string to find a user.
     :param password: password for a user.
@@ -85,9 +89,11 @@ async def authenticate(*, session: AsyncSession, email: str, password: str) -> U
     return db_user
 
 
-async def create_item(*, session: AsyncSession, item_in: ItemCreate, owner_id: str) -> Item:
+async def create_item(
+    *, session: AsyncSession, item_in: ItemCreate, owner_id: str
+) -> Item:
     """Function to create an item.
-    
+
     :param session: The SQLAlchemy session object.
     :param item_in: Item data to create an item.
     :param owner_id: User id to assign item.
@@ -101,18 +107,18 @@ async def create_item(*, session: AsyncSession, item_in: ItemCreate, owner_id: s
     return db_item
 
 
-async def create_exercise(*, session: AsyncSession, exercise_in: ExerciseCreate) -> Exercise:
+async def create_exercise(
+    *, session: AsyncSession, exercise_in: ExerciseCreate
+) -> Exercise:
     """Function to create an exercise.
 
     :param session: The SQLAlchemy session object.
     :param exercise_in: exercise data to create an Exercise from.
     :returns: Exercise object.
     """
-    
+
     db_exercise = Exercise.model_validate(exercise_in)
     session.add(db_exercise)
     await session.commit()
     await session.refresh(db_exercise)
     return db_exercise
-
-

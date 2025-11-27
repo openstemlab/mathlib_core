@@ -15,6 +15,7 @@ from tests.utils.utils import random_email, random_lower_string
 
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
+
 async def test_get_access_token(client: AsyncClient) -> None:
     login_data = {
         "username": settings.FIRST_SUPERUSER,
@@ -89,7 +90,9 @@ async def test_reset_password(client: AsyncClient, db: AsyncSession) -> None:
     )
     user = await create_user(session=db, user_create=user_create)
     token = generate_password_reset_token(email=email)
-    headers = await user_authentication_headers(client=client, email=email, password=password)
+    headers = await user_authentication_headers(
+        client=client, email=email, password=password
+    )
     data = {"new_password": new_password, "token": token}
 
     r = await client.post(

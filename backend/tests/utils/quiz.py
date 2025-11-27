@@ -14,7 +14,6 @@ async def create_random_quiz(db: AsyncSession) -> QuizPublic:
     :returns: QuizPublic - public representation of the quiz.
     """
 
-
     user = await create_random_user(db)
     tag = random_lower_string()
     title = random_lower_string()
@@ -26,7 +25,9 @@ async def create_random_quiz(db: AsyncSession) -> QuizPublic:
 
     await db.flush()
 
-    quiz = await form_quiz(length=5, tags=[tag], owner_id=user.id, title=title, session=db)
+    quiz = await form_quiz(
+        length=5, tags=[tag], owner_id=user.id, title=title, session=db
+    )
 
     await db.refresh(quiz)
     return quiz

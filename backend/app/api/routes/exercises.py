@@ -26,7 +26,7 @@ async def read_exercises(session: SessionDep, skip: int = 0, limit: int = 100) -
     count = (await session.exec(count_statement)).one()
     statement = select(Exercise).offset(skip).limit(limit).order_by(Exercise.id)
     exercises = (await session.exec(statement)).all()
-    public_list =[]
+    public_list = []
     for exercise in exercises:
         exercise_data = ExercisePublic.model_validate(exercise)
         public_list.append(exercise_data)
@@ -57,7 +57,7 @@ async def create_exercise(
 
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not enough permissions")
-    
+
     exercise = Exercise.model_validate(exercise_in)
     session.add(exercise)
     await session.commit()
@@ -111,7 +111,7 @@ async def delete_exercise(
     exercise = await session.get(Exercise, id)
     if not exercise:
         raise HTTPException(status_code=404, detail="Exercise not found")
-    
+
     await session.delete(exercise)
     await session.commit()
 

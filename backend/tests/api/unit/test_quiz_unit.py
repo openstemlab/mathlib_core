@@ -12,7 +12,10 @@ from tests.utils.user import create_random_user
 
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
-async def test_form_quiz(db: AsyncSession,)-> None:
+
+async def test_form_quiz(
+    db: AsyncSession,
+) -> None:
     """Tests the form_quiz function."""
 
     user = await create_random_user(db)
@@ -24,8 +27,9 @@ async def test_form_quiz(db: AsyncSession,)-> None:
     for _ in range(10):
         exercise = await create_random_exercise(db, tags=tags)
 
-
-    quiz = await form_quiz(length=5, tags=tags, owner_id=owner_id, title=title, session=db)
+    quiz = await form_quiz(
+        length=5, tags=tags, owner_id=owner_id, title=title, session=db
+    )
 
     assert quiz.title == title
     assert quiz.owner_id == owner_id
@@ -37,7 +41,7 @@ async def test_form_quiz(db: AsyncSession,)-> None:
 async def test_form_quiz_not_enough_exercises(db: AsyncSession):
     user = await create_random_user(db)
     tags = ["algebra"]
-    
+
     # create only 2 exercises with the given tag
     for _ in range(2):
         await create_random_exercise(db, tags=tags)
@@ -71,6 +75,7 @@ async def test_form_quiz_empty_tags_returns_random_exercises(db: AsyncSession):
 
     assert len(quiz.exercises) == 2
 
+
 async def test_form_quiz_length_zero_returns_empty_quiz(db: AsyncSession):
     user = await create_random_user(db)
     quiz = await form_quiz(length=0, tags=["math"], owner_id=user.id, session=db)
@@ -102,7 +107,6 @@ async def test_form_quiz_owner_not_exists_still_works(db: AsyncSession):
     assert len(quiz.exercises) == 2
 
 
-
 async def test_deactivate_quizzes(db: AsyncSession):
     """Tests the deactivate_quizzes function."""
 
@@ -130,7 +134,9 @@ async def test_deactivate_quizzes(db: AsyncSession):
 
     assert active_quiz1.status == QuizStatusChoices.IN_PROGRESS.value
     assert active_quiz2.status == QuizStatusChoices.IN_PROGRESS.value
-    assert inactive_quiz.status == QuizStatusChoices.IN_PROGRESS.value  # Should remain unchanged
+    assert (
+        inactive_quiz.status == QuizStatusChoices.IN_PROGRESS.value
+    )  # Should remain unchanged
 
 
 async def test_get_quiz_by_id(db: AsyncSession):
@@ -142,10 +148,10 @@ async def test_get_quiz_by_id(db: AsyncSession):
     exercise2 = await create_random_exercise(db)
 
     quiz = Quiz(
-        owner_id=user.id, 
+        owner_id=user.id,
         status=QuizStatusChoices.ACTIVE.value,
         exercises=[exercise1, exercise2],
-        )
+    )
     db.add(quiz)
     await db.flush()
 
@@ -158,7 +164,6 @@ async def test_get_quiz_by_id(db: AsyncSession):
     fetched_exercise_ids = {ex.exercise.id for ex in fetched_quiz.exercises}
     assert exercise1.id in fetched_exercise_ids
     assert exercise2.id in fetched_exercise_ids
-
 
 
 async def test_get_quiz_by_id_not_found(db: AsyncSession):
@@ -183,24 +188,20 @@ async def test_get_all_quizzes_by_owner(db: AsyncSession):
             owner_id=user.id,
             status=QuizStatusChoices.ACTIVE.value,
             exercises=[exercise],
-            title=f"Quiz {i+1}",
+            title=f"Quiz {i + 1}",
         )
         db.add(quiz)
-
-
 
     # Create a quiz for another user
     other_user = await create_random_user(db)
     other_quiz = Quiz(
         owner_id=other_user.id,
         status=QuizStatusChoices.ACTIVE.value,
-        title="Other User Quiz"
+        title="Other User Quiz",
     )
     db.add(other_quiz)
 
     await db.flush()
-
-
 
     quizzes = await get_all_quizzes_by_owner(owner_id=user.id, session=db)
 
@@ -208,12 +209,11 @@ async def test_get_all_quizzes_by_owner(db: AsyncSession):
     for quiz in quizzes:
         assert quiz.owner_id == user.id
         assert other_quiz.id != quiz.id
-        assert quiz.title in [f"Quiz {i+1}" for i in range(3)]
+        assert quiz.title in [f"Quiz {i + 1}" for i in range(3)]
         assert len(quiz.exercises) == 1
         exercise_ids = [ex.exercise.id for ex in quiz.exercises]
         assert exercise_ids[0] is not None
         assert quiz.exercises[0].position == 0
-
 
 
 async def test_create_quiz(db: AsyncSession):
@@ -237,10 +237,7 @@ async def test_create_quiz(db: AsyncSession):
     quiz_statement = (
         select(Quiz)
         .where(Quiz.owner_id == user.id, Quiz.title == "New Quiz")
-        .options(
-            selectinload(Quiz.quiz_exercises)
-            .selectinload(QuizExercise.exercise)
-                )
+        .options(selectinload(Quiz.quiz_exercises).selectinload(QuizExercise.exercise))
     )
     quiz = (await db.exec(quiz_statement)).first()
 
@@ -281,7 +278,6 @@ async def test_create_quiz_raises_on_missing_exercise(db: AsyncSession):
 
     with pytest.raises(ValueError, match="Exercises not found in DB"):
         await create_quiz(quiz_in, db, user.id)
-
 
 
 async def test_update_quiz(db: AsyncSession):
@@ -381,8 +377,9 @@ async def test_update_quiz_exercises_only_keeps_title(db: AsyncSession):
     assert updated.exercises[0].exercise.id == ex2.id
 
 
-
-async def test_update_quiz_with_exercise_positions_none_does_not_keep_exercises(db: AsyncSession):
+async def test_update_quiz_with_exercise_positions_none_does_not_keep_exercises(
+    db: AsyncSession,
+):
     user = await create_random_user(db)
     ex = await create_random_exercise(db)
 
@@ -398,8 +395,8 @@ async def test_update_quiz_with_exercise_positions_none_does_not_keep_exercises(
 
 async def test_start_new_quiz(db: AsyncSession):
     user = await create_random_user(db)
-    exercise1= await create_random_exercise(db)
-    exercise2= await create_random_exercise(db)
+    exercise1 = await create_random_exercise(db)
+    exercise2 = await create_random_exercise(db)
     exercise1.tags.append("tag1")
     exercise2.tags.append("tag1")
 
@@ -414,7 +411,6 @@ async def test_start_new_quiz(db: AsyncSession):
         assert "tag1" in ex.exercise.tags
         assert not hasattr(ex.exercise, "solution")
     assert quiz.status == QuizStatusChoices.ACTIVE.value
-
 
 
 async def test_start_new_quiz_length_zero(db: AsyncSession):
@@ -452,21 +448,33 @@ async def test_start_new_quiz_calls_deactivate(mock_deactivate, db: AsyncSession
     mock_deactivate.assert_called_once_with(owner_id=user.id, session=db)
 
 
-
 async def test_save_quiz_progress(db: AsyncSession):
     user = await create_random_user(db)
     exercise = await create_random_exercise(db)
 
-    quiz = Quiz(owner_id=user.id, status=QuizStatusChoices.ACTIVE.value, exercises=[exercise])
+    quiz = Quiz(
+        owner_id=user.id, status=QuizStatusChoices.ACTIVE.value, exercises=[exercise]
+    )
     db.add(quiz)
     await db.flush()
 
-    answer = SubmitAnswer(response=[{"exercise_id":exercise.id,
-        "answer":exercise.solution,}]        
-        )
+    answer = SubmitAnswer(
+        response=[
+            {
+                "exercise_id": exercise.id,
+                "answer": exercise.solution,
+            }
+        ]
+    )
     await save_quiz_progress(quiz=quiz, answers=answer, session=db)
 
-    updated_quiz = (await db.exec(select(Quiz, QuizExercise).where(Quiz.id == quiz.id, QuizExercise.quiz_id == quiz.id))).first()
+    updated_quiz = (
+        await db.exec(
+            select(Quiz, QuizExercise).where(
+                Quiz.id == quiz.id, QuizExercise.quiz_id == quiz.id
+            )
+        )
+    ).first()
     assert updated_quiz[0].status == QuizStatusChoices.ACTIVE.value
     assert updated_quiz[1].is_correct == True
 
@@ -478,13 +486,13 @@ async def test_save_quiz_progress_handles_none_answer_gracefully(db: AsyncSessio
     db.add(quiz)
     await db.flush()
 
-    answer = SubmitAnswer(
-        response=[{"exercise_id": ex.id, "answer": None}]
-    )
+    answer = SubmitAnswer(response=[{"exercise_id": ex.id, "answer": None}])
 
     await save_quiz_progress(session=db, quiz=quiz, answers=answer)
 
-    link = (await db.exec(select(QuizExercise).where(QuizExercise.exercise_id == ex.id))).one()
+    link = (
+        await db.exec(select(QuizExercise).where(QuizExercise.exercise_id == ex.id))
+    ).one()
     # None → "" → not equal to "42"
     assert link.is_correct is False
 
@@ -505,13 +513,13 @@ async def test_save_quiz_progress_last_answer_wins(db: AsyncSession):
 
     await save_quiz_progress(session=db, quiz=quiz, answers=answer)
 
-    link = (await db.exec(select(QuizExercise).where(QuizExercise.exercise_id == ex.id))).one()
+    link = (
+        await db.exec(select(QuizExercise).where(QuizExercise.exercise_id == ex.id))
+    ).one()
     assert link.is_correct is True
 
 
-
-async def test_load_active_quiz(db:AsyncSession):
-
+async def test_load_active_quiz(db: AsyncSession):
     user = await create_random_user(db)
 
     ex_list = []
@@ -520,9 +528,7 @@ async def test_load_active_quiz(db:AsyncSession):
         ex_list.append(ex)
 
     quiz = Quiz(
-        owner_id=user.id,
-        status=QuizStatusChoices.ACTIVE.value,
-        exercises=ex_list
+        owner_id=user.id, status=QuizStatusChoices.ACTIVE.value, exercises=ex_list
     )
     db.add(quiz)
     await db.flush()
@@ -534,7 +540,6 @@ async def test_load_active_quiz(db:AsyncSession):
     if active_quiz:
         for ex in active_quiz.exercises:
             assert ex.exercise.id in [exercise.id for exercise in ex_list]
-
 
 
 async def test_load_active_quiz_returns_none_for_in_progress_quiz(db: AsyncSession):
@@ -579,7 +584,9 @@ async def test_load_active_quiz_returns_oldest_when_multiple_active(db: AsyncSes
     assert result.exercises[0].exercise.id == ex1.id
 
 
-async def test_load_active_quiz_returns_empty_exercises_when_quiz_has_no_exercises(db: AsyncSession):
+async def test_load_active_quiz_returns_empty_exercises_when_quiz_has_no_exercises(
+    db: AsyncSession,
+):
     user = await create_random_user(db)
 
     quiz = Quiz(owner_id=user.id, status=QuizStatusChoices.ACTIVE.value)
@@ -601,14 +608,13 @@ async def test_load_active_quiz_excludes_deleted_exercises_gracefully(db: AsyncS
     quiz = Quiz(
         owner_id=user.id,
         status=QuizStatusChoices.ACTIVE.value,
-        )
+    )
     db.add(quiz)
     await db.flush()
 
     qe = QuizExercise(quiz_id=quiz.id, exercise_id=ex.id, position=0)
     db.add(qe)
     await db.flush()
-
 
     # Confirm quiz loads exercise
     result = await load_active_quiz(session=db, owner_id=user.id)
@@ -623,31 +629,27 @@ async def test_load_active_quiz_excludes_deleted_exercises_gracefully(db: AsyncS
     # Reload quiz
     result = await load_active_quiz(session=db, owner_id=user.id)
 
-    count = (await db.exec(select(func.count()).where(QuizExercise.exercise_id == ex.id))).one()
+    count = (
+        await db.exec(select(func.count()).where(QuizExercise.exercise_id == ex.id))
+    ).one()
     assert count == 0
 
     # The link should be gone due to CASCADE
-    assert len(result.exercises) == 0  
+    assert len(result.exercises) == 0
 
 
-async def test_submit_quiz(db:AsyncSession):
+async def test_submit_quiz(db: AsyncSession):
     user = await create_random_user(db)
     ex = await create_random_exercise(db)
-    quiz = Quiz(
-        owner_id=user.id,
-        status=QuizStatusChoices.ACTIVE.value,
-        exercises=[ex]
-    )
+    quiz = Quiz(owner_id=user.id, status=QuizStatusChoices.ACTIVE.value, exercises=[ex])
     db.add(quiz)
     await db.flush()
     await db.refresh(quiz)
-    answers = SubmitAnswer(
-        response=[{"exercise_id": ex.id, "answer": ex.solution}]
-    )
+    answers = SubmitAnswer(response=[{"exercise_id": ex.id, "answer": ex.solution}])
 
     await submit_quiz(session=db, quiz=quiz, answers=answers)
 
-    statement = select(Quiz).where(Quiz.id==quiz.id)
+    statement = select(Quiz).where(Quiz.id == quiz.id)
     submitted_quiz = (await db.exec(statement)).one()
     assert submitted_quiz is not None
     assert submitted_quiz.status == QuizStatusChoices.SUBMITTED.value
@@ -669,5 +671,7 @@ async def test_submit_quiz_empty_answers(db: AsyncSession):
     await db.refresh(quiz)
     assert quiz.status == QuizStatusChoices.SUBMITTED.value
 
-    link = (await db.exec(select(QuizExercise).where(QuizExercise.quiz_id == quiz.id))).one()
-    assert link.is_correct is None    
+    link = (
+        await db.exec(select(QuizExercise).where(QuizExercise.quiz_id == quiz.id))
+    ).one()
+    assert link.is_correct is None

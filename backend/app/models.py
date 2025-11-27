@@ -1,7 +1,7 @@
 from uuid_extensions import uuid7str
 from enum import Enum
 
-from pydantic import EmailStr, field_validator
+from pydantic import EmailStr
 from sqlmodel import Field, Relationship, SQLModel
 from sqlalchemy import Column, String, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB
@@ -68,7 +68,7 @@ class UserUpdate(UserBase):
 
 class UserUpdateMe(SQLModel):
     """Model for self-updating user profile information.
-    
+
     Attributes:
         full_name: Optional full name of the user with maximum length 255.
         email: Optional email address with maximum length 255.
@@ -80,7 +80,7 @@ class UserUpdateMe(SQLModel):
 
 class UpdatePassword(SQLModel):
     """Model for password update requests.
-    
+
     Attributes:
         current_password: Required current password.
         new_password: Required new password.
@@ -93,7 +93,7 @@ class UpdatePassword(SQLModel):
 # Database model, database table inferred from class name
 class User(UserBase, table=True):
     """Database representation of a user entity. Inherits from UserBase.
-    
+
     Attributes:
         id: Unique identifier for the user.
         hashed_password: Hashed password for secure storage.
@@ -105,13 +105,15 @@ class User(UserBase, table=True):
     id: str = Field(default_factory=uuid7str, primary_key=True)
     hashed_password: str
     items: list["Item"] = Relationship(
-        back_populates="owner", 
+        back_populates="owner",
         cascade_delete=True,
-        sa_relationship_kwargs={'lazy': 'selectin'},)
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
     quizzes: list["Quiz"] = Relationship(
-        back_populates="owner", 
-        cascade_delete=True, 
-        sa_relationship_kwargs={'lazy': 'selectin'})
+        back_populates="owner",
+        cascade_delete=True,
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
 
 
 # Properties to return via API, id is always required
@@ -132,6 +134,7 @@ class UsersPublic(SQLModel):
         data: List of UserPublic objects.
         count: Total number of users.
     """
+
     data: list[UserPublic]
     count: int
 
@@ -139,19 +142,19 @@ class UsersPublic(SQLModel):
 # Shared properties
 class ItemBase(SQLModel):
     """Base model for items.
-    
+
     Attributes:
         title: Required title with maximum length 255.
         description: Optional description with maximum length 255.
     """
+
     title: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=255)
 
 
 # Properties to receive on item creation
 class ItemCreate(ItemBase):
-    """Model for item creation via API endpoints. Inherits from ItemBase.
-    """
+    """Model for item creation via API endpoints. Inherits from ItemBase."""
 
     pass
 
@@ -159,7 +162,7 @@ class ItemCreate(ItemBase):
 # Properties to receive on item update
 class ItemUpdate(ItemBase):
     """Model for item updates via API endpoints. Inherits from ItemBase.
-    
+
     Attributes:
         title: Optional title with maximum length 255.
     """
@@ -181,9 +184,8 @@ class Item(ItemBase, table=True):
     id: str = Field(default_factory=uuid7str, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
     owner: User | None = Relationship(
-        back_populates="items", 
-        sa_relationship_kwargs={'lazy': 'selectin'}
-        )
+        back_populates="items", sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
 
 # Properties to return via API, id is always required
@@ -225,7 +227,7 @@ class Message(SQLModel):
 # JSON payload containing access token
 class Token(SQLModel):
     """Access token model.
-    
+
     Attributes:
         access_token: Required access token string.
         token_type: Optional token type string, defaults to 'bearer'.
@@ -238,16 +240,17 @@ class Token(SQLModel):
 # Contents of JWT token
 class TokenPayload(SQLModel):
     """JWT token payload validation model.
-    
+
     Attributes:
         sub: Optional User identifier.
     """
+
     sub: str | None = None
 
 
 class NewPassword(SQLModel):
     """Validation model for a new password.
-    
+
     Attributes:
         token: Authentication token.
         new_password: New password.
@@ -257,13 +260,14 @@ class NewPassword(SQLModel):
     new_password: str = Field(min_length=8, max_length=40)
 
 
-
 class QuizExercise(SQLModel, table=True):
     """Model for M2M link between quizzes and exercises.
-    
+
     Attributes:
         quiz_id: Foreign key to the quiz ID.
+        quiz: Relationship to the quiz.
         exercise_id: Foreign key to the exercise ID.
+        exercise: Relationship to the exercise.
         position: Position of the exercise in the quiz.
         is_correct: Optional boolean indicating if the exercise was answered correctly. None if not attempted.
     """
@@ -282,7 +286,7 @@ class QuizExercise(SQLModel, table=True):
     quiz: "Quiz" = Relationship(back_populates="quiz_exercises")
     exercise: "Exercise" = Relationship(back_populates="quiz_exercises")
     position: int = 0
-    is_correct: bool|None = None 
+    is_correct: bool | None = None
 
 
 class ExerciseBase(SQLModel):
@@ -292,8 +296,7 @@ class ExerciseBase(SQLModel):
         source_name: Source of an excercise.
         source_id: id of an exercise in a given source.
         text: Text of an exercise.
-        solution: correct answer to the exercise
-        false_answers: list of false answers to the exercise to put in a quiz
+        answers: list of all answers to the exercise to put in a quiz
         formula: formula for the exercise, if given
         illustration: illustration for the exercise, if given
     """
@@ -307,15 +310,18 @@ class ExerciseBase(SQLModel):
 
 
 class ExerciseCreate(ExerciseBase):
+    """Model for creating a new exercise.
+
+    Attributes:
+        solution: Required correct answer to the exercise
     """
-    Model for creating a new exercise.
-    """
+
     solution: str
 
 
 class ExerciseUpdate(ExerciseBase):
     """Model for updating an existing exercise via API endpoint.
-    
+
     Attributes:
         source_name: Optional. Source of an excercise.
         source_id: Optional. ID of an exercise in a given source.
@@ -325,6 +331,7 @@ class ExerciseUpdate(ExerciseBase):
         illustration: Optional. Illustration for the exercise, if given
         tags: Optional. List of Tag objects, representing tags for the exercise
     """
+
     source_name: str | None = Field(default=None, max_length=255)
     source_id: str | None = Field(default=None, max_length=255)
     text: str | None = None
@@ -338,42 +345,42 @@ class Exercise(ExerciseBase, table=True):
 
     Attributes:
         id: Unique identifier for the exercise.
-        tags: list of Tag objects representing tags for the exercise
+        answers: list of answers for the exercise
+        illustration: list of illustrations for the exercise
+        tags: list of tag strings representing tags for the exercise
         quizzes: list of Quiz objects representing quizzes that include the exercise
+        quiz_exercises: list of QuizExercise objects representing exercises in quizzes for quick access to position and grading
+        solution: correct answer to the exercise
+        text: text of the exercise
     """
 
-    __tablename__="exercise"
+    __tablename__ = "exercise"
     id: str = Field(default_factory=uuid7str, primary_key=True)
-    answers: list[str] = Field(
-        default_factory=list,
-        sa_column=Column(JSONB)
-    )
+    answers: list[str] = Field(default_factory=list, sa_column=Column(JSONB))
     illustration: list[str] | None = Field(
-        default_factory=list,
-        sa_column=Column(JSONB)
+        default_factory=list, sa_column=Column(JSONB)
     )
-    tags: list[str] = Field(
-        default_factory=list,
-        sa_column=Column(JSONB)
-    )
+    tags: list[str] = Field(default_factory=list, sa_column=Column(JSONB))
     quizzes: list["Quiz"] = Relationship(
-        back_populates="exercises", 
-        link_model=QuizExercise, 
+        back_populates="exercises",
+        link_model=QuizExercise,
         sa_relationship_kwargs={
-            'lazy': 'selectin',
-            'cascade': 'all, delete',          # ORM cascade
-            'passive_deletes': True,           # Trust DB to handle deletes
-            'overlaps':'quiz'
-            },
+            "lazy": "selectin",
+            "cascade": "all, delete",  # ORM cascade
+            "passive_deletes": True,  # Trust DB to handle deletes
+            "overlaps": "quiz",
+        },
     )
     quiz_exercises: list["QuizExercise"] = Relationship(
         back_populates="exercise",
         sa_relationship_kwargs={
-            'cascade': 'all, delete',
-            'passive_deletes': True,
-            'overlaps':'quizzes'
-        })
+            "cascade": "all, delete",
+            "passive_deletes": True,
+            "overlaps": "quizzes",
+        },
+    )
     solution: str
+
 
 class ExercisePublic(ExerciseBase):
     """Public representation of Exercise for API responses. Inherits from ExerciseBase.
@@ -383,6 +390,9 @@ class ExercisePublic(ExerciseBase):
         illustration: list of illustrations for the exercise
         answers: list of answers for the exercise
         tags: list of strings representing tags for the exercise
+        source_name: Source of an excercise.
+        source_id: id of an exercise in a given source.
+        text: Text of an exercise.
     """
 
     id: str
@@ -404,37 +414,40 @@ class ExercisesPublic(SQLModel):
 
 
 class QuizStatusChoices(str, Enum):
-    NEW: str = "new" #freshly created, not started yet
-    IN_PROGRESS: str = "in_progress" #started but not completed
-    ACTIVE: str = "active" #last attempt is active
-    SUBMITTED: str = "submitted" #completed but not graded yet
-    GRADED: str = "graded" #graded and finished
+    """Enum for quiz status choices. Only one active quiz per user can exist at a time, db enforced."""
+
+    NEW: str = "new"  # freshly created, not started yet
+    IN_PROGRESS: str = "in_progress"  # started but not completed
+    ACTIVE: str = "active"  # last attempt is active
+    SUBMITTED: str = "submitted"  # completed but not graded yet
+    GRADED: str = "graded"  # graded and finished
 
 
 class QuizBase(SQLModel):
     """Base model for a quiz.
 
     Attributes:
-        is_active: Optional flag indicating whether the quiz is active. False by default.
+        status: new/in_progress/active/submitted/graded, new is default
+        title: title of the quiz, optional.
     """
 
     status: QuizStatusChoices = QuizStatusChoices.NEW.value
-    title: str|None = Field(default=None, max_length=255)
+    title: str | None = Field(default=None, max_length=255)
 
 
 class QuizCreate(QuizBase):
     """Model for creating a new quiz via API endpoints.
 
     Attributes:
-        is_active: Flag indicating whether the quiz is active.
+        exercise_positions: list of QuizExerciseData representing exercises and their positions.
     """
-    exercise_positions: list[QuizExerciseData] = Field(default_factory=list)
 
+    exercise_positions: list[QuizExerciseData] = Field(default_factory=list)
 
 
 class QuizUpdate(QuizBase):
     """Model for updating a quiz via API endpoints. Inherits from QuizBase.
-    
+
     Atributes:
         status: Optional, status of the quiz.
         title: Optional, title of the quiz.
@@ -443,7 +456,7 @@ class QuizUpdate(QuizBase):
 
     status: QuizStatusChoices | None = None
     title: str | None = Field(default=None, max_length=255)
-    exercise_positions: list[QuizExerciseData]|None = None
+    exercise_positions: list[QuizExerciseData] | None = None
 
 
 class Quiz(QuizBase, table=True):
@@ -454,21 +467,23 @@ class Quiz(QuizBase, table=True):
         owner_id: Unique identifier for the user who created the quiz.
         owner: User object representing the owner of the quiz
         exercises: list of Exercise objects representing exercises included in the quiz
+        status: status of the quiz - new/active/submitted/graded.
+        quiz_exercises: list of QuizExercise objects for quick access to positions and scores.
     """
 
-    __tablename__="quiz"
+    __tablename__ = "quiz"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
     owner: User | None = Relationship(back_populates="quizzes")
     exercises: list["Exercise"] = Relationship(
-        back_populates="quizzes", 
+        back_populates="quizzes",
         link_model=QuizExercise,
         sa_relationship_kwargs={
-            'lazy': 'selectin',
-            'cascade': 'all, delete',
-            'passive_deletes': True,
-            'overlaps':'exercise,quiz_exercises',
-            },
+            "lazy": "selectin",
+            "cascade": "all, delete",
+            "passive_deletes": True,
+            "overlaps": "exercise,quiz_exercises",
+        },
     )
     status: str = Field(
         default=QuizStatusChoices.NEW.value,
@@ -477,16 +492,14 @@ class Quiz(QuizBase, table=True):
             String,
             CheckConstraint(
                 "status IN ('new', 'in_progress', 'active', 'submitted', 'graded')",
-                name="valid_quiz_status"
+                name="valid_quiz_status",
             ),
             nullable=False,
-        )
+        ),
     )
     quiz_exercises: list["QuizExercise"] = Relationship(
         back_populates="quiz",
-        sa_relationship_kwargs={
-            'lazy': 'selectin',
-            'overlaps':'exercises,quizzes'},
+        sa_relationship_kwargs={"lazy": "selectin", "overlaps": "exercises,quizzes"},
     )
 
 
@@ -513,6 +526,7 @@ class QuizExerciseDataPublic(SQLModel):
     exercise: ExercisePublic
     position: int
 
+
 class QuizPublic(QuizBase):
     """Public representation of a Quiz. Inherits for QuizBase.
 
@@ -520,38 +534,41 @@ class QuizPublic(QuizBase):
         id: Unique identifier for the quiz.
         owner_id: Unique identifier for the user who created the quiz.
         exercises: list of Exercise objects representing exercises included in the quiz
+        status: status of the quiz - new/active/submitted/graded.
     """
 
     id: str
     owner_id: str
-    exercises: list[QuizExerciseDataPublic] # list of {"exercise": ExercisePublic, "position": int}
+    exercises: list[
+        QuizExerciseDataPublic
+    ]  # list of {"exercise": ExercisePublic, "position": int}
     status: str
 
 
 class QuizzesPublic(SQLModel):
     """Public representation for a list of Quizzes.
-    
+
     Attributes:
         data: list of QuizPublic objects
         count: total number of quizzes
     """
-    
+
     data: list[QuizPublic]
     count: int
 
 
 class SubmitAnswer(SQLModel):
-    """Model for submitting an answer to a quiz exercise.
+    """Model for submitting answers to the quiz.
 
     Attributes:
         response: list of dicts with exercise_id and answer.
     """
 
-    response: list[dict[str, str|None]] #[{"exercise_id": str, "answer": str}, ...]
+    response: list[dict[str, str | None]]  # [{"exercise_id": str, "answer": str}, ...]
 
 
 class StartQuizRequest(SQLModel):
-    """Model for starting a new quiz.
+    """Model with data for starting a new quiz.
 
     Attributes:
         tags: List of tags to filter exercises.
@@ -559,6 +576,6 @@ class StartQuizRequest(SQLModel):
         title: Optional title for the quiz.
     """
 
-    tags: list[str]|None = Field(default_factory=list)
+    tags: list[str] | None = Field(default_factory=list)
     length: int = 5
     title: str | None = Field(default=None, max_length=255)

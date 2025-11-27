@@ -6,7 +6,11 @@ from app import crud
 from app.core.config import settings
 from app.models import User, UserCreate
 
-async_engine = create_async_engine(str(settings.SQLALCHEMY_DATABASE_URI), echo=True, future=True,)
+async_engine = create_async_engine(
+    str(settings.SQLALCHEMY_DATABASE_URI),
+    echo=True,
+    future=True,
+)
 
 async_session_maker = async_sessionmaker(async_engine, expire_on_commit=False)
 
@@ -25,9 +29,9 @@ async def init_db(session: AsyncSession) -> None:
     # This works because the models are already imported and registered from app.models
     # SQLModel.metadata.create_all(engine)
 
-    user = (await session.exec(
-        select(User).where(User.email == settings.FIRST_SUPERUSER)
-    )).first()
+    user = (
+        await session.exec(select(User).where(User.email == settings.FIRST_SUPERUSER))
+    ).first()
     if not user:
         user_in = UserCreate(
             email=settings.FIRST_SUPERUSER,

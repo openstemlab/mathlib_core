@@ -5,7 +5,8 @@ from sqlmodel import select
 
 from app.backend_pre_start import init, logger
 
-pytestmark=pytest.mark.asyncio(loop_scope="module")
+pytestmark = pytest.mark.asyncio(loop_scope="module")
+
 
 async def test_init_successful_connection() -> None:
     engine_mock = MagicMock()
@@ -26,10 +27,10 @@ async def test_init_successful_connection() -> None:
         except Exception:
             connection_successful = False
 
-        assert (
-            connection_successful
-        ), "The database connection should be successful and not raise an exception."
+        assert connection_successful, (
+            "The database connection should be successful and not raise an exception."
+        )
 
-        assert session_mock.exec.called_once_with(
-            select(1)
-        ), "The session should execute a select statement once."
+        assert session_mock.exec.called_once_with(select(1)), (
+            "The session should execute a select statement once."
+        )

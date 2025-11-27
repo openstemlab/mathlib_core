@@ -1,23 +1,16 @@
 """
 Quizzes only accessable by the owner
 """
-
-from uuid_extensions import uuid7str
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from sqlmodel import select, func
-
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.quiz import (
-    form_quiz, 
-    deactivate_quizzes,
     get_quiz_by_id,
     get_all_quizzes_by_owner,
     create_quiz,
     update_quiz,
-    delete_quiz,
     start_new_quiz,
     save_quiz_progress,
     load_active_quiz,
@@ -31,10 +24,7 @@ from app.models import (
     QuizPublic,
     QuizzesPublic,
     QuizStatusChoices,
-    QuizExercise,
     StartQuizRequest,
-    Exercise,
-    ExercisePublic,
     SubmitAnswer,
     Message,
     User,
@@ -67,7 +57,8 @@ async def read_quizzes_route(
             detail="You do not have permission to access this resource.",
         )
 
-#reminder to myself - /load conflicts with /{id}, more specific endpoints should go first
+
+# reminder to myself - /load conflicts with /{id}, more specific endpoints should go first
 @router.get("/load", response_model=QuizPublic)
 async def load_quiz_route(
     user_id: str,
@@ -80,8 +71,7 @@ async def load_quiz_route(
 
     if current_user.id != user_id:
         raise HTTPException(
-            status_code=403,
-            detail="You can only load quizzes for yourself."
+            status_code=403, detail="You can only load quizzes for yourself."
         )
     quiz = await load_active_quiz(session=session, owner_id=user_id)
 
@@ -124,7 +114,7 @@ async def create_quiz_route(
             quiz_in=quiz_in,
             session=session,
             owner_id=user_id,
-        )        
+        )
         return Message(message="Quiz created successfully")
     else:
         raise HTTPException(
@@ -166,7 +156,7 @@ async def delete_quiz_route(
     quiz = await session.get(Quiz, id)
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
-        
+
     if current_user.id == quiz.owner_id:
         await session.delete(quiz)
         await session.commit()
@@ -176,13 +166,13 @@ async def delete_quiz_route(
         raise HTTPException(
             status_code=403, detail="You cant delete a quiz for someone else."
         )
-    
+
 
 @router.post("/start", response_model=QuizPublic)
 async def start_quiz_route(
     session: SessionDep,
     current_user: CurrentUser,
-    user_id:str,
+    user_id: str,
     quiz_data: StartQuizRequest,
 ) -> Any:
     """
@@ -191,19 +181,15 @@ async def start_quiz_route(
 
     if current_user.id != user_id:
         raise HTTPException(
-            status_code=403,
-            detail="You can only start quizzes for yourself."
+            status_code=403, detail="You can only start quizzes for yourself."
         )
     if quiz_data.length > 500:
-        raise HTTPException(
-            status_code=422,
-            detail="Quiz length cannot exceed 500."
-        )
-    quiz =  await start_new_quiz(quiz_data=quiz_data, session=session, owner_id=current_user.id)
+        raise HTTPException(status_code=422, detail="Quiz length cannot exceed 500.")
+    quiz = await start_new_quiz(
+        quiz_data=quiz_data, session=session, owner_id=current_user.id
+    )
 
     return quiz
-
-
 
 
 @router.put("/{id}/save", response_model=Message)
@@ -216,11 +202,11 @@ async def save_quiz_route(
     """
     Save an active quiz. Only one active quiz can be saved at a time.
     """
-    #assuming that the quiz already created by /quizzes/start endpoint
+    # assuming that the quiz already created by /quizzes/start endpoint
     quiz = await session.get(Quiz, id)
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
-    
+
     if quiz.status == QuizStatusChoices.SUBMITTED.value:
         raise HTTPException(
             status_code=400,
@@ -232,10 +218,9 @@ async def save_quiz_route(
             status_code=403,
             detail="You do not have permission to save this quiz.",
         )
-    
+
     await save_quiz_progress(session=session, quiz=quiz, answers=answers)
     return Message(message="Quiz progress saved successfully")
-
 
 
 @router.post("/{id}/submit", response_model=Message)
@@ -259,12 +244,10 @@ async def submit_quiz_route(
         )
     if quiz.status != QuizStatusChoices.ACTIVE.value:
         raise HTTPException(
-            status_code=400,
-            detail="Only active quizzes can be submitted."
+            status_code=400, detail="Only active quizzes can be submitted."
         )
     try:
         await submit_quiz(session=session, quiz=quiz, answers=answers)
         return Message(message="Quiz submitted successfully")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-

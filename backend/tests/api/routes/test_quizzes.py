@@ -1,6 +1,7 @@
 """
 Tests for testing tests.
 """
+
 import pytest
 from unittest.mock import ANY, Mock, AsyncMock, patch
 from uuid_extensions import uuid7str
@@ -16,20 +17,21 @@ from tests.utils.user import create_random_user, user_authentication_headers
 from tests.utils.quiz import create_random_quiz
 from tests.utils.exercise import create_random_exercise
 from app.models import (
-    ExercisePublic, 
-    Quiz, 
-    QuizCreate, 
-    QuizPublic, 
+    ExercisePublic,
+    Quiz,
+    QuizCreate,
+    QuizPublic,
     QuizStatusChoices,
-    QuizExerciseData, 
+    QuizExerciseData,
     QuizExerciseDataPublic,
-    User, 
+    User,
     StartQuizRequest,
     SubmitAnswer,
-    )
+)
 
 
 pytestmark = pytest.mark.asyncio(loop_scope="module")
+
 
 async def test_create_quiz(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
     """
@@ -42,9 +44,15 @@ async def test_create_quiz(client_with_test_db: AsyncClient, db: AsyncSession) -
     headers = await user_authentication_headers(
         client=client_with_test_db, email=user.email, password="testpass"
     )
-    exercises = [( await create_random_exercise(db)) for _ in range(3)]
-    exercise_positions = [QuizExerciseData.model_validate({"exercise":ex, "position":i}) for i, ex in enumerate(exercises)]
-    quiz_in = QuizCreate(status="new", exercise_positions=exercise_positions,)
+    exercises = [(await create_random_exercise(db)) for _ in range(3)]
+    exercise_positions = [
+        QuizExerciseData.model_validate({"exercise": ex, "position": i})
+        for i, ex in enumerate(exercises)
+    ]
+    quiz_in = QuizCreate(
+        status="new",
+        exercise_positions=exercise_positions,
+    )
 
     response = await client_with_test_db.post(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/",
@@ -78,14 +86,14 @@ async def test_create_quiz_for_other_user(
         json=quiz_in.model_dump(),
     )
     assert response.status_code == 403
-    content=response.json()
-    assert content["detail"]=="You cant save a quiz for someone else."
+    content = response.json()
+    assert content["detail"] == "You cant save a quiz for someone else."
 
 
 async def test_read_quizzes(
     client_with_test_db: AsyncClient,
     db: AsyncSession,
-)->None:
+) -> None:
     """
     Test retrieving a list of quizzes for an authenticated user.
 
@@ -200,7 +208,9 @@ async def test_read_quiz_not_found(
 
 
 async def test_read_quiz_not_enough_permission(
-    client_with_test_db: AsyncClient, db: AsyncSession, normal_user_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient,
+    db: AsyncSession,
+    normal_user_token_headers: dict[str, str],
 ) -> None:
     """
     Test unauthorized access to another user's quiz.
@@ -254,7 +264,9 @@ async def test_update_quiz(
     assert content["status"] == update_data["status"]
 
 
-async def test_update_quiz_not_found(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_update_quiz_not_found(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     """
     Test updating a non-existent quiz.
 
@@ -285,7 +297,9 @@ async def test_update_quiz_not_found(client_with_test_db: AsyncClient, db: Async
 
 
 async def test_update_quiz_not_enough_permission(
-    client_with_test_db: AsyncClient, db: AsyncSession, normal_user_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient,
+    db: AsyncSession,
+    normal_user_token_headers: dict[str, str],
 ) -> None:
     """
     Test unauthorized quiz update attempt.
@@ -334,7 +348,9 @@ async def test_delete_quiz(client_with_test_db: AsyncClient, db: AsyncSession) -
     assert content["message"] == "Quiz deleted successfully"
 
 
-async def test_delete_not_found(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_delete_not_found(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     """
     Test deleting a non-existent quiz.
 
@@ -363,7 +379,9 @@ async def test_delete_not_found(client_with_test_db: AsyncClient, db: AsyncSessi
 
 
 async def test_delete_not_enough_permission(
-    client_with_test_db: AsyncClient, db: AsyncSession, normal_user_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient,
+    db: AsyncSession,
+    normal_user_token_headers: dict[str, str],
 ) -> None:
     """
     Test unauthorized quiz deletion attempt.
@@ -403,7 +421,7 @@ async def test_start_quiz(
     quiz_length = 5
     quiz_tags = ["algebra"]
 
-    quiz_data=StartQuizRequest(length=5, tags=["algebra"], title="My Quiz")
+    quiz_data = StartQuizRequest(length=5, tags=["algebra"], title="My Quiz")
 
     exercise_public_1 = ExercisePublic(
         id=uuid7str(),
@@ -434,7 +452,7 @@ async def test_start_quiz(
     )
     mock_start_new_quiz.return_value = quiz_public
 
-        # Act
+    # Act
     response = await client_with_test_db.post(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/start",
         headers=headers,
@@ -456,21 +474,24 @@ async def test_start_quiz(
 
     # Verify mocks
     mock_start_new_quiz.assert_awaited_once_with(
-        quiz_data = quiz_data,
+        quiz_data=quiz_data,
         owner_id=user.id,
         session=ANY,
     )
 
 
-
-async def test_start_quiz_wrong_user_id(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_start_quiz_wrong_user_id(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     """
     Test that a user cannot start a quiz with a different user_id in URL.
     """
     user1 = await create_random_user(db)
     user2 = await create_random_user(db)  # different user
 
-    headers = await user_authentication_headers(client=client_with_test_db, email=user1.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user1.email, password="testpass"
+    )
 
     quiz_data = {"length": 5, "tags": ["algebra"], "title": "My Quiz"}
 
@@ -484,15 +505,13 @@ async def test_start_quiz_wrong_user_id(client_with_test_db: AsyncClient, db: As
     assert response.json()["detail"] == "You can only start quizzes for yourself."
 
 
-async def test_start_quiz_unauthorized(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_start_quiz_unauthorized(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     """
     Test that an unauthenticated user cannot start a quiz.
     """
-    quiz_data = {
-        "length": 5,
-        "tags": ["algebra"],
-        "title": "My Quiz"
-    }
+    quiz_data = {"length": 5, "tags": ["algebra"], "title": "My Quiz"}
 
     response = await client_with_test_db.post(
         f"{settings.API_V1_STR}/users/{uuid7str()}/quizzes/start",
@@ -502,15 +521,18 @@ async def test_start_quiz_unauthorized(client_with_test_db: AsyncClient, db: Asy
     assert response.status_code == 401
 
 
-
-async def test_start_quiz_invalid_data_sent(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_start_quiz_invalid_data_sent(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     """
     Test starting quiz with invalid data.
     """
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
 
-    invalid_data = {"tags": 1}  
+    invalid_data = {"tags": 1}
 
     response = await client_with_test_db.post(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/start",
@@ -519,7 +541,6 @@ async def test_start_quiz_invalid_data_sent(client_with_test_db: AsyncClient, db
     )
 
     assert response.status_code == 422
-
 
 
 async def test_start_quiz_invalid_length(
@@ -545,13 +566,16 @@ async def test_start_quiz_invalid_length(
     assert content["detail"] == "Quiz length cannot exceed 500."
 
 
-
-async def test_save_quiz_route(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_save_quiz_route(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     """
     Test saving a quiz.
     """
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
 
     exercise = await create_random_exercise(db)
 
@@ -571,17 +595,21 @@ async def test_save_quiz_route(client_with_test_db: AsyncClient, db: AsyncSessio
     response = await client_with_test_db.put(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}/save",
         headers=headers,
-        json=answers
+        json=answers,
     )
 
     assert response.status_code == 200
     content = response.json()
-    assert content['message'] == 'Quiz progress saved successfully'
+    assert content["message"] == "Quiz progress saved successfully"
 
 
-async def test_save_quiz_no_quiz(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_save_quiz_no_quiz(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
     fake_id = uuid7str()
     answers = SubmitAnswer(
         response=[{"exercise_id": uuid7str(), "answer": "4"}]
@@ -595,9 +623,13 @@ async def test_save_quiz_no_quiz(client_with_test_db: AsyncClient, db: AsyncSess
     assert response.status_code == 404
 
 
-async def test_save_quiz_submitted_quiz(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_save_quiz_submitted_quiz(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
     exercise = await create_random_exercise(db)
     quiz = Quiz(
         owner_id=user.id,
@@ -618,12 +650,16 @@ async def test_save_quiz_submitted_quiz(client_with_test_db: AsyncClient, db: As
     )
 
     assert response.status_code == 400
-    assert response.json()['detail'] == 'Cannot save a submitted quiz.'
+    assert response.json()["detail"] == "Cannot save a submitted quiz."
 
 
-async def test_save_quiz_wrong_user(client_with_test_db: AsyncClient, db: AsyncSession, normal_user_token_headers: dict[str,str]) -> None:
+async def test_save_quiz_wrong_user(
+    client_with_test_db: AsyncClient,
+    db: AsyncSession,
+    normal_user_token_headers: dict[str, str],
+) -> None:
     user = await create_random_user(db)
-    answers ={'response':[]}
+    answers = {"response": []}
 
     quiz = Quiz(
         owner_id=user.id,
@@ -640,18 +676,24 @@ async def test_save_quiz_wrong_user(client_with_test_db: AsyncClient, db: AsyncS
     )
 
     assert response.status_code == 403
-    assert response.json()['detail'] == 'You do not have permission to save this quiz.'
+    assert response.json()["detail"] == "You do not have permission to save this quiz."
 
 
-async def test_save_quiz_empty_answers(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_save_quiz_empty_answers(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     """
     Test saving a quiz with no answers (valid use case).
     """
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
 
     exercise = await create_random_exercise(db)
-    quiz = Quiz(owner_id=user.id, status=QuizStatusChoices.ACTIVE.value, exercises=[exercise])
+    quiz = Quiz(
+        owner_id=user.id, status=QuizStatusChoices.ACTIVE.value, exercises=[exercise]
+    )
     db.add(quiz)
     await db.flush()
     await db.refresh(quiz)
@@ -659,20 +701,23 @@ async def test_save_quiz_empty_answers(client_with_test_db: AsyncClient, db: Asy
     response = await client_with_test_db.put(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}/save",
         headers=headers,
-        json={"response": []}
+        json={"response": []},
     )
 
     assert response.status_code == 200
     assert response.json()["message"] == "Quiz progress saved successfully"
 
 
-
-async def test_save_quiz_invalid_answer_format(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_save_quiz_invalid_answer_format(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     """
     Test sending malformed answers (e.g. wrong types).
     """
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
 
     quiz = Quiz(owner_id=user.id, status=QuizStatusChoices.ACTIVE.value)
     db.add(quiz)
@@ -680,23 +725,20 @@ async def test_save_quiz_invalid_answer_format(client_with_test_db: AsyncClient,
     await db.refresh(quiz)
 
     # Invalid: exercise_id not a string, answer not a string
-    invalid_payload = {
-        "response": [
-            {"exercise_id": 123, "answer": 456}
-        ]
-    }
+    invalid_payload = {"response": [{"exercise_id": 123, "answer": 456}]}
 
     response = await client_with_test_db.put(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}/save",
         headers=headers,
-        json=invalid_payload
+        json=invalid_payload,
     )
 
     assert response.status_code == 422
 
 
-
-async def test_load_quiz_route(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_load_quiz_route(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     """
     Test loading a quiz.
     """
@@ -713,29 +755,37 @@ async def test_load_quiz_route(client_with_test_db: AsyncClient, db: AsyncSessio
     result = await db.exec(query)
     quiz_with_owner = result.one()
 
-    headers = await user_authentication_headers(client=client_with_test_db, email=quiz_with_owner.owner.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db,
+        email=quiz_with_owner.owner.email,
+        password="testpass",
+    )
 
     response = await client_with_test_db.get(
         f"{settings.API_V1_STR}/users/{quiz_with_owner.owner_id}/quizzes/load",
         headers=headers,
-        )
-    
+    )
+
     assert response.status_code == 200
     content = response.json()
-    assert content['id'] == str(quiz.id)
-    assert content['status'] == QuizStatusChoices.ACTIVE.value
+    assert content["id"] == str(quiz.id)
+    assert content["status"] == QuizStatusChoices.ACTIVE.value
 
 
-async def test_load_quiz_no_quiz(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_load_quiz_no_quiz(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
     response = await client_with_test_db.get(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/load",
         headers=headers,
     )
 
     assert response.status_code == 404
-    assert response.json()['detail'] == 'Quiz not found.'
+    assert response.json()["detail"] == "Quiz not found."
 
 
 async def test_load_quiz_wrong_user_id(
@@ -750,9 +800,7 @@ async def test_load_quiz_wrong_user_id(
     user = await create_random_user(db)
     # Auth as user
     headers = await user_authentication_headers(
-        client=client_with_test_db,
-        email=user.email,
-        password="testpass"
+        client=client_with_test_db, email=user.email, password="testpass"
     )
 
     # Try to access /users/{fake_user}/quizzes/load
@@ -766,12 +814,14 @@ async def test_load_quiz_wrong_user_id(
     assert response.json()["detail"] == "You can only load quizzes for yourself."
 
 
-
-@pytest.mark.parametrize("status", [
-    QuizStatusChoices.NEW.value,
-    QuizStatusChoices.IN_PROGRESS.value,
-    QuizStatusChoices.SUBMITTED.value,
-])
+@pytest.mark.parametrize(
+    "status",
+    [
+        QuizStatusChoices.NEW.value,
+        QuizStatusChoices.IN_PROGRESS.value,
+        QuizStatusChoices.SUBMITTED.value,
+    ],
+)
 async def test_load_quiz_inactive_status(
     client_with_test_db: AsyncClient,
     db: AsyncSession,
@@ -782,19 +832,13 @@ async def test_load_quiz_inactive_status(
     """
 
     quiz = await create_random_quiz(db)
-    await db.exec(
-        update(Quiz)
-        .where(Quiz.id == quiz.id)
-        .values(status=status)
-    )
+    await db.exec(update(Quiz).where(Quiz.id == quiz.id).values(status=status))
     statement = select(Quiz).where(Quiz.id == quiz.id).options(joinedload(Quiz.owner))
     user = (await db.exec(statement)).one().owner
     await db.flush()
 
     headers = await user_authentication_headers(
-        client=client_with_test_db,
-        email=user.email,
-        password="testpass"
+        client=client_with_test_db, email=user.email, password="testpass"
     )
 
     response = await client_with_test_db.get(
@@ -806,21 +850,22 @@ async def test_load_quiz_inactive_status(
     assert response.json()["detail"] == "Quiz not found."
 
 
-
 async def test_submit_quiz(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
     """
     Test submitting a quiz.
     """
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
     exercise1 = await create_random_exercise(db)
     exercise2 = await create_random_exercise(db)
 
     quiz = Quiz(
         owner_id=user.id,
-        status=QuizStatusChoices.ACTIVE.value, 
-        exercises=[exercise1, exercise2]
-        )
+        status=QuizStatusChoices.ACTIVE.value,
+        exercises=[exercise1, exercise2],
+    )
 
     db.add(quiz)
     await db.flush()
@@ -828,41 +873,46 @@ async def test_submit_quiz(client_with_test_db: AsyncClient, db: AsyncSession) -
 
     answers = SubmitAnswer(
         response=[
-            {"exercise_id":exercise1.id, "answer":exercise1.solution},
-            {"exercise_id":exercise2.id, "answer":exercise2.solution}
+            {"exercise_id": exercise1.id, "answer": exercise1.solution},
+            {"exercise_id": exercise2.id, "answer": exercise2.solution},
         ]
-        ).model_dump()
+    ).model_dump()
 
     response = await client_with_test_db.post(
         f"{settings.API_V1_STR}/users/{user.id}/quizzes/{quiz.id}/submit",
         headers=headers,
         json=answers,
-        )
-    
+    )
+
     assert response.status_code == 200
     assert response.json()["message"] == "Quiz submitted successfully"
 
 
-async def test_submit_quiz_no_quiz(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
-    user = await create_random_user(db) 
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+async def test_submit_quiz_no_quiz(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
+    user = await create_random_user(db)
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
     fake_quiz_id = uuid7str()
     answers = {"response": [{"exercise_id": "1", "answer": "2"}]}
 
     response = await client_with_test_db.post(
-            f"{settings.API_V1_STR}/users/{user.id}/quizzes/{fake_quiz_id}/submit",
-            headers=headers,
-            json=answers,
+        f"{settings.API_V1_STR}/users/{user.id}/quizzes/{fake_quiz_id}/submit",
+        headers=headers,
+        json=answers,
     )
 
     assert response.status_code == 404
-    assert response.json()['detail'] == 'Quiz not found'
+    assert response.json()["detail"] == "Quiz not found"
 
 
 async def test_submit_quiz_wrong_user_id(
-        client_with_test_db: AsyncClient,
-        db: AsyncSession,
-        normal_user_token_headers:dict[str,str]) -> None:
+    client_with_test_db: AsyncClient,
+    db: AsyncSession,
+    normal_user_token_headers: dict[str, str],
+) -> None:
     """
     Test that a user cannot submit a quiz by forging user_id in URL.
     Should return 403 even if active quiz exists.
@@ -872,45 +922,43 @@ async def test_submit_quiz_wrong_user_id(
     quiz = Quiz(
         owner_id=user.id,
         status=QuizStatusChoices.ACTIVE.value,
-        )
+    )
     db.add(quiz)
     await db.flush()
     answers = {"response": [{"exercise_id": "1", "answer": "2"}]}
 
     response = await client_with_test_db.post(
-            f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}/submit",
-            headers=normal_user_token_headers,
-            json=answers,
+        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}/submit",
+        headers=normal_user_token_headers,
+        json=answers,
     )
     assert response.status_code == 403
-    assert response.json()["detail"] == "You do not have permission to submit this quiz."
+    assert (
+        response.json()["detail"] == "You do not have permission to submit this quiz."
+    )
 
 
-
-@pytest.mark.parametrize("status", [
-    QuizStatusChoices.NEW.value,
-    QuizStatusChoices.IN_PROGRESS.value,
-    QuizStatusChoices.SUBMITTED.value,
-])
+@pytest.mark.parametrize(
+    "status",
+    [
+        QuizStatusChoices.NEW.value,
+        QuizStatusChoices.IN_PROGRESS.value,
+        QuizStatusChoices.SUBMITTED.value,
+    ],
+)
 async def test_submit_quiz_non_active_status(
     client_with_test_db: AsyncClient,
     db: AsyncSession,
     status: str,
 ) -> None:
     quiz = await create_random_quiz(db)
-    await db.exec(
-        update(Quiz)
-        .where(Quiz.id == quiz.id)
-        .values(status=status)
-    )
+    await db.exec(update(Quiz).where(Quiz.id == quiz.id).values(status=status))
     await db.flush()
     await db.refresh(quiz)
 
     user = (await db.exec(select(User).where(User.id == quiz.owner_id))).one()
     headers = await user_authentication_headers(
-        client=client_with_test_db,
-        email=user.email,
-        password="testpass"
+        client=client_with_test_db, email=user.email, password="testpass"
     )
 
     answers = SubmitAnswer(response=[]).model_dump()
@@ -922,9 +970,7 @@ async def test_submit_quiz_non_active_status(
     )
 
     assert response.status_code == 400
-    assert "active" in response.json()["detail"].lower()  
-
-
+    assert "active" in response.json()["detail"].lower()
 
 
 async def test_submit_quiz_invalid_answer_format(
@@ -934,7 +980,9 @@ async def test_submit_quiz_invalid_answer_format(
     Test submitting answers with invalid types (e.g. exercise_id as int).
     """
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
 
     quiz = Quiz(owner_id=user.id, status=QuizStatusChoices.ACTIVE.value)
     db.add(quiz)
@@ -963,14 +1011,17 @@ async def test_submit_quiz_missing_answers(
     Test submitting answers for only some of the quiz exercises.
     """
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
 
     exercise1 = await create_random_exercise(db)
     exercise2 = await create_random_exercise(db)
     quiz = Quiz(
         owner_id=user.id,
         status=QuizStatusChoices.ACTIVE.value,
-        exercises=[exercise1, exercise2])
+        exercises=[exercise1, exercise2],
+    )
     db.add(quiz)
     await db.flush()
     await db.refresh(quiz)

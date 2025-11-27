@@ -9,7 +9,6 @@ from app.core.config import settings
 from tests.utils.item import create_random_item
 
 
-
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
 

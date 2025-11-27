@@ -8,7 +8,7 @@ from tests.utils.utils import random_lower_string
 
 async def create_random_item(db: AsyncSession) -> Item:
     """Function to create a randomized Item."""
-    
+
     user = await create_random_user(db)
     owner_id = user.id
     assert owner_id is not None

@@ -15,10 +15,13 @@ from tests.utils.utils import random_email, random_lower_string
 
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
+
 async def test_get_users_superuser_me(
     client: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
-    r = await client.get(f"{settings.API_V1_STR}/users/me", headers=superuser_token_headers)
+    r = await client.get(
+        f"{settings.API_V1_STR}/users/me", headers=superuser_token_headers
+    )
     current_user = r.json()
     assert current_user
     assert current_user["is_active"] is True
@@ -29,7 +32,9 @@ async def test_get_users_superuser_me(
 async def test_get_users_normal_user_me(
     client: AsyncClient, normal_user_token_headers: dict[str, str]
 ) -> None:
-    r = await client.get(f"{settings.API_V1_STR}/users/me", headers=normal_user_token_headers)
+    r = await client.get(
+        f"{settings.API_V1_STR}/users/me", headers=normal_user_token_headers
+    )
     current_user = r.json()
     assert current_user
     assert current_user["is_active"] is True
@@ -79,7 +84,9 @@ async def test_get_existing_user(
     assert existing_user.email == api_user["email"]
 
 
-async def test_get_existing_user_current_user(client: AsyncClient, db: AsyncSession) -> None:
+async def test_get_existing_user_current_user(
+    client: AsyncClient, db: AsyncSession
+) -> None:
     username = random_email()
     password = random_lower_string()
     user_in = UserCreate(email=username, password=password)
@@ -163,7 +170,9 @@ async def test_retrieve_users(
     user_in2 = UserCreate(email=username2, password=password2)
     await crud.create_user(session=db, user_create=user_in2)
 
-    r = await client.get(f"{settings.API_V1_STR}/users/", headers=superuser_token_headers)
+    r = await client.get(
+        f"{settings.API_V1_STR}/users/", headers=superuser_token_headers
+    )
     all_users = r.json()
 
     assert len(all_users["data"]) > 1
@@ -463,7 +472,9 @@ async def test_delete_user_not_found(
 async def test_delete_user_current_super_user_error(
     client: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
-    super_user = await crud.get_user_by_email(session=db, email=settings.FIRST_SUPERUSER)
+    super_user = await crud.get_user_by_email(
+        session=db, email=settings.FIRST_SUPERUSER
+    )
     assert super_user
     user_id = super_user.id
 

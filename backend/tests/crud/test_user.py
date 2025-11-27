@@ -8,7 +8,8 @@ from app.models import User, UserCreate, UserUpdate
 from tests.utils.utils import random_email, random_lower_string
 
 
-pytestmark=pytest.mark.asyncio(loop_scope="module")
+pytestmark = pytest.mark.asyncio(loop_scope="module")
+
 
 async def test_create_user(db: AsyncSession) -> None:
     email = random_email()
@@ -24,7 +25,9 @@ async def test_authenticate_user(db: AsyncSession) -> None:
     password = random_lower_string()
     user_in = UserCreate(email=email, password=password)
     user = await crud.create_user(session=db, user_create=user_in)
-    authenticated_user = await crud.authenticate(session=db, email=email, password=password)
+    authenticated_user = await crud.authenticate(
+        session=db, email=email, password=password
+    )
     assert authenticated_user
     assert user.email == authenticated_user.email
 

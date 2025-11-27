@@ -10,9 +10,7 @@ from tests.utils.exercise import create_random_exercise
 from tests.utils.utils import random_lower_string
 
 
-
 pytestmark = pytest.mark.asyncio(loop_scope="module")
-
 
 
 async def test_create_exercise(
@@ -62,7 +60,9 @@ async def test_create_exercise_not_enough_permissions(
 
 
 async def test_read_exercise(
-    client_with_test_db: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ) -> None:
     """Checks if exercise is read properly."""
 
@@ -99,7 +99,9 @@ async def test_read_exercise_not_found(
 
 
 async def test_read_exercises(
-    client_with_test_db: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ) -> None:
     """Checks if list of exercises is returned properly."""
 
@@ -115,12 +117,13 @@ async def test_read_exercises(
 
 
 async def test_update_exercise(
-    client_with_test_db: httpx.AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient,
+    superuser_token_headers: dict[str, str],
+    db: AsyncSession,
 ) -> None:
     """Checks if exercise is updated properly."""
 
     exercise = await create_random_exercise(db)
-
 
     tags = [
         random_lower_string(),
@@ -149,9 +152,9 @@ async def test_update_exercise(
     assert content["tags"] == data["tags"]
 
 
-
 async def test_update_exercise_not_found(
-    client_with_test_db: httpx.AsyncClient, superuser_token_headers: dict[str, str],
+    client_with_test_db: httpx.AsyncClient,
+    superuser_token_headers: dict[str, str],
 ) -> None:
     """Checks that nonexistent exercise cant be updated and returns 404."""
 
@@ -177,7 +180,9 @@ async def test_update_exercise_not_found(
 
 
 async def test_update_exercise_not_enough_permissions(
-    client_with_test_db: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ) -> None:
     """Checks that normal users cant change exercises."""
 
@@ -204,7 +209,9 @@ async def test_update_exercise_not_enough_permissions(
 
 
 async def test_delete_exercise(
-    client_with_test_db: httpx.AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient,
+    superuser_token_headers: dict[str, str],
+    db: AsyncSession,
 ) -> None:
     """Checks that exercises can be deleted properly."""
 
@@ -233,10 +240,12 @@ async def test_delete_exercise_not_found(
 
 
 async def test_delete_exercise_not_enough_permissions(
-    client_with_test_db: httpx.AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: httpx.AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ) -> None:
     """Checks that normal users cant delete exercises."""
-    
+
     exercise = await create_random_exercise(db)
     response = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/exercises/{exercise.id}",
