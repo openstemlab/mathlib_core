@@ -577,5 +577,5 @@ class StartQuizRequest(SQLModel):
     """
 
     tags: list[str] | None = Field(default_factory=list)
-    length: int = 5
+    length: int = Field(default=5, le=500)
     title: str | None = Field(default=None, max_length=255)

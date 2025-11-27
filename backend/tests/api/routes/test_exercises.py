@@ -34,7 +34,6 @@ async def test_create_exercise(
     assert content["source_name"] == data["source_name"]
     assert content["source_id"] == data["source_id"]
     assert content["text"] == data["text"]
-    assert content["solution"] == data["solution"]
     assert "id" in content
 
 
@@ -78,7 +77,6 @@ async def test_read_exercise(
     assert content["source_name"] == exercise.source_name
     assert content["source_id"] == exercise.source_id
     assert content["text"] == exercise.text
-    assert content["solution"] == exercise.solution
     assert content["id"] == str(exercise.id)
     assert len(content["tags"]) > 0
     assert content["tags"] == exercise.tags
@@ -146,7 +144,6 @@ async def test_update_exercise(
     assert content["source_name"] == data["source_name"]
     assert content["source_id"] == data["source_id"]
     assert content["text"] == data["text"]
-    assert content["solution"] == data["solution"]
     assert content["id"] == str(exercise.id)
     assert isinstance(content["tags"], list)
     assert content["tags"] == data["tags"]

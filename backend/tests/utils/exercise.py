@@ -22,6 +22,5 @@ async def create_random_exercise(db: AsyncSession, tags=None) -> Exercise:
     )
     db.add(exercise)
     await db.flush()
-    # await db.commit()
     await db.refresh(exercise)
     return exercise

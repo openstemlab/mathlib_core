@@ -60,7 +60,7 @@ async def create_exercise(
 
     exercise = Exercise.model_validate(exercise_in)
     session.add(exercise)
-    await session.commit()
+    await session.flush()
     await session.refresh(exercise)
 
     response = ExercisePublic.model_validate(exercise)
@@ -91,7 +91,7 @@ async def update_exercise(
 
     exercise.sqlmodel_update(exercise_data)
     session.add(exercise)
-    await session.commit()
+    await session.flush()
     await session.refresh(exercise)
 
     response = ExercisePublic.model_validate(exercise)
@@ -113,6 +113,6 @@ async def delete_exercise(
         raise HTTPException(status_code=404, detail="Exercise not found")
 
     await session.delete(exercise)
-    await session.commit()
+    await session.flush()
 
     return Message(message="Exercise deleted successfully")

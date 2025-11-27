@@ -17,9 +17,9 @@ pytestmark = pytest.mark.asyncio(loop_scope="module")
 
 
 async def test_get_users_superuser_me(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
-    r = await client.get(
+    r = await client_with_test_db.get(
         f"{settings.API_V1_STR}/users/me", headers=superuser_token_headers
     )
     current_user = r.json()
@@ -30,9 +30,9 @@ async def test_get_users_superuser_me(
 
 
 async def test_get_users_normal_user_me(
-    client: AsyncClient, normal_user_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]
 ) -> None:
-    r = await client.get(
+    r = await client_with_test_db.get(
         f"{settings.API_V1_STR}/users/me", headers=normal_user_token_headers
     )
     current_user = r.json()
@@ -43,7 +43,7 @@ async def test_get_users_normal_user_me(
 
 
 async def test_create_user_new_email(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     with (
         patch("app.utils.send_email", return_value=None),
@@ -53,7 +53,7 @@ async def test_create_user_new_email(
         username = random_email()
         password = random_lower_string()
         data = {"email": username, "password": password}
-        r = await client.post(
+        r = await client_with_test_db.post(
             f"{settings.API_V1_STR}/users/",
             headers=superuser_token_headers,
             json=data,
@@ -66,14 +66,14 @@ async def test_create_user_new_email(
 
 
 async def test_get_existing_user(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     username = random_email()
     password = random_lower_string()
     user_in = UserCreate(email=username, password=password)
     user = await crud.create_user(session=db, user_create=user_in)
     user_id = user.id
-    r = await client.get(
+    r = await client_with_test_db.get(
         f"{settings.API_V1_STR}/users/{user_id}",
         headers=superuser_token_headers,
     )
@@ -85,7 +85,7 @@ async def test_get_existing_user(
 
 
 async def test_get_existing_user_current_user(
-    client: AsyncClient, db: AsyncSession
+    client_with_test_db: AsyncClient, db: AsyncSession
 ) -> None:
     username = random_email()
     password = random_lower_string()
@@ -97,12 +97,12 @@ async def test_get_existing_user_current_user(
         "username": username,
         "password": password,
     }
-    r = await client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = await client_with_test_db.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
     tokens = r.json()
     a_token = tokens["access_token"]
     headers = {"Authorization": f"Bearer {a_token}"}
 
-    r = await client.get(
+    r = await client_with_test_db.get(
         f"{settings.API_V1_STR}/users/{user_id}",
         headers=headers,
     )
@@ -114,9 +114,9 @@ async def test_get_existing_user_current_user(
 
 
 async def test_get_existing_user_permissions_error(
-    client: AsyncClient, normal_user_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]
 ) -> None:
-    r = await client.get(
+    r = await client_with_test_db.get(
         f"{settings.API_V1_STR}/users/{uuid7str()}",
         headers=normal_user_token_headers,
     )
@@ -125,7 +125,7 @@ async def test_get_existing_user_permissions_error(
 
 
 async def test_create_user_existing_username(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     username = random_email()
     # username = email
@@ -133,7 +133,7 @@ async def test_create_user_existing_username(
     user_in = UserCreate(email=username, password=password)
     await crud.create_user(session=db, user_create=user_in)
     data = {"email": username, "password": password}
-    r = await client.post(
+    r = await client_with_test_db.post(
         f"{settings.API_V1_STR}/users/",
         headers=superuser_token_headers,
         json=data,
@@ -144,12 +144,12 @@ async def test_create_user_existing_username(
 
 
 async def test_create_user_by_normal_user(
-    client: AsyncClient, normal_user_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]
 ) -> None:
     username = random_email()
     password = random_lower_string()
     data = {"email": username, "password": password}
-    r = await client.post(
+    r = await client_with_test_db.post(
         f"{settings.API_V1_STR}/users/",
         headers=normal_user_token_headers,
         json=data,
@@ -158,7 +158,7 @@ async def test_create_user_by_normal_user(
 
 
 async def test_retrieve_users(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     username = random_email()
     password = random_lower_string()
@@ -170,7 +170,7 @@ async def test_retrieve_users(
     user_in2 = UserCreate(email=username2, password=password2)
     await crud.create_user(session=db, user_create=user_in2)
 
-    r = await client.get(
+    r = await client_with_test_db.get(
         f"{settings.API_V1_STR}/users/", headers=superuser_token_headers
     )
     all_users = r.json()
@@ -182,12 +182,12 @@ async def test_retrieve_users(
 
 
 async def test_update_user_me(
-    client: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     full_name = "Updated Name"
     email = random_email()
     data = {"full_name": full_name, "email": email}
-    r = await client.patch(
+    r = await client_with_test_db.patch(
         f"{settings.API_V1_STR}/users/me",
         headers=normal_user_token_headers,
         json=data,
@@ -205,14 +205,14 @@ async def test_update_user_me(
 
 
 async def test_update_password_me(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     new_password = random_lower_string()
     data = {
         "current_password": settings.FIRST_SUPERUSER_PASSWORD,
         "new_password": new_password,
     }
-    r = await client.patch(
+    r = await client_with_test_db.patch(
         f"{settings.API_V1_STR}/users/me/password",
         headers=superuser_token_headers,
         json=data,
@@ -232,7 +232,7 @@ async def test_update_password_me(
         "current_password": new_password,
         "new_password": settings.FIRST_SUPERUSER_PASSWORD,
     }
-    r = await client.patch(
+    r = await client_with_test_db.patch(
         f"{settings.API_V1_STR}/users/me/password",
         headers=superuser_token_headers,
         json=old_data,
@@ -244,11 +244,11 @@ async def test_update_password_me(
 
 
 async def test_update_password_me_incorrect_password(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
     new_password = random_lower_string()
     data = {"current_password": new_password, "new_password": new_password}
-    r = await client.patch(
+    r = await client_with_test_db.patch(
         f"{settings.API_V1_STR}/users/me/password",
         headers=superuser_token_headers,
         json=data,
@@ -259,7 +259,7 @@ async def test_update_password_me_incorrect_password(
 
 
 async def test_update_user_me_email_exists(
-    client: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     username = random_email()
     password = random_lower_string()
@@ -267,7 +267,7 @@ async def test_update_user_me_email_exists(
     user = await crud.create_user(session=db, user_create=user_in)
 
     data = {"email": user.email}
-    r = await client.patch(
+    r = await client_with_test_db.patch(
         f"{settings.API_V1_STR}/users/me",
         headers=normal_user_token_headers,
         json=data,
@@ -277,13 +277,13 @@ async def test_update_user_me_email_exists(
 
 
 async def test_update_password_me_same_password_error(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
     data = {
         "current_password": settings.FIRST_SUPERUSER_PASSWORD,
         "new_password": settings.FIRST_SUPERUSER_PASSWORD,
     }
-    r = await client.patch(
+    r = await client_with_test_db.patch(
         f"{settings.API_V1_STR}/users/me/password",
         headers=superuser_token_headers,
         json=data,
@@ -295,12 +295,12 @@ async def test_update_password_me_same_password_error(
     )
 
 
-async def test_register_user(client: AsyncClient, db: AsyncSession) -> None:
+async def test_register_user(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
     username = random_email()
     password = random_lower_string()
     full_name = random_lower_string()
     data = {"email": username, "password": password, "full_name": full_name}
-    r = await client.post(
+    r = await client_with_test_db.post(
         f"{settings.API_V1_STR}/users/signup",
         json=data,
     )
@@ -317,7 +317,7 @@ async def test_register_user(client: AsyncClient, db: AsyncSession) -> None:
     assert verify_password(password, user_db.hashed_password)
 
 
-async def test_register_user_already_exists_error(client: AsyncClient) -> None:
+async def test_register_user_already_exists_error(client_with_test_db: AsyncClient) -> None:
     password = random_lower_string()
     full_name = random_lower_string()
     data = {
@@ -325,7 +325,7 @@ async def test_register_user_already_exists_error(client: AsyncClient) -> None:
         "password": password,
         "full_name": full_name,
     }
-    r = await client.post(
+    r = await client_with_test_db.post(
         f"{settings.API_V1_STR}/users/signup",
         json=data,
     )
@@ -334,7 +334,7 @@ async def test_register_user_already_exists_error(client: AsyncClient) -> None:
 
 
 async def test_update_user(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     username = random_email()
     password = random_lower_string()
@@ -342,7 +342,7 @@ async def test_update_user(
     user = await crud.create_user(session=db, user_create=user_in)
 
     data = {"full_name": "Updated_full_name"}
-    r = await client.patch(
+    r = await client_with_test_db.patch(
         f"{settings.API_V1_STR}/users/{user.id}",
         headers=superuser_token_headers,
         json=data,
@@ -360,10 +360,10 @@ async def test_update_user(
 
 
 async def test_update_user_not_exists(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
     data = {"full_name": "Updated_full_name"}
-    r = await client.patch(
+    r = await client_with_test_db.patch(
         f"{settings.API_V1_STR}/users/{uuid7str()}",
         headers=superuser_token_headers,
         json=data,
@@ -373,7 +373,7 @@ async def test_update_user_not_exists(
 
 
 async def test_update_user_email_exists(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     username = random_email()
     password = random_lower_string()
@@ -386,7 +386,7 @@ async def test_update_user_email_exists(
     user2 = await crud.create_user(session=db, user_create=user_in2)
 
     data = {"email": user2.email}
-    r = await client.patch(
+    r = await client_with_test_db.patch(
         f"{settings.API_V1_STR}/users/{user.id}",
         headers=superuser_token_headers,
         json=data,
@@ -396,7 +396,7 @@ async def test_update_user_email_exists(
     assert r.json()["detail"] == "User with this email already exists"
 
 
-async def test_delete_user_me(client: AsyncClient, db: AsyncSession) -> None:
+async def test_delete_user_me(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
     username = random_email()
     password = random_lower_string()
     user_in = UserCreate(email=username, password=password)
@@ -407,12 +407,12 @@ async def test_delete_user_me(client: AsyncClient, db: AsyncSession) -> None:
         "username": username,
         "password": password,
     }
-    r = await client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = await client_with_test_db.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
     tokens = r.json()
     a_token = tokens["access_token"]
     headers = {"Authorization": f"Bearer {a_token}"}
 
-    r = await client.delete(
+    r = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/users/me",
         headers=headers,
     )
@@ -428,9 +428,9 @@ async def test_delete_user_me(client: AsyncClient, db: AsyncSession) -> None:
 
 
 async def test_delete_user_me_as_superuser(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
-    r = await client.delete(
+    r = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/users/me",
         headers=superuser_token_headers,
     )
@@ -440,14 +440,14 @@ async def test_delete_user_me_as_superuser(
 
 
 async def test_delete_user_super_user(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     username = random_email()
     password = random_lower_string()
     user_in = UserCreate(email=username, password=password)
     user = await crud.create_user(session=db, user_create=user_in)
     user_id = user.id
-    r = await client.delete(
+    r = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/users/{user_id}",
         headers=superuser_token_headers,
     )
@@ -459,9 +459,9 @@ async def test_delete_user_super_user(
 
 
 async def test_delete_user_not_found(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
-    r = await client.delete(
+    r = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/users/{uuid7str()}",
         headers=superuser_token_headers,
     )
@@ -470,7 +470,7 @@ async def test_delete_user_not_found(
 
 
 async def test_delete_user_current_super_user_error(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     super_user = await crud.get_user_by_email(
         session=db, email=settings.FIRST_SUPERUSER
@@ -478,7 +478,7 @@ async def test_delete_user_current_super_user_error(
     assert super_user
     user_id = super_user.id
 
-    r = await client.delete(
+    r = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/users/{user_id}",
         headers=superuser_token_headers,
     )
@@ -487,14 +487,14 @@ async def test_delete_user_current_super_user_error(
 
 
 async def test_delete_user_without_privileges(
-    client: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
 ) -> None:
     username = random_email()
     password = random_lower_string()
     user_in = UserCreate(email=username, password=password)
     user = await crud.create_user(session=db, user_create=user_in)
 
-    r = await client.delete(
+    r = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/users/{user.id}",
         headers=normal_user_token_headers,
     )

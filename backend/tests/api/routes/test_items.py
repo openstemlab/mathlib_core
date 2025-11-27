@@ -13,10 +13,10 @@ pytestmark = pytest.mark.asyncio(loop_scope="module")
 
 
 async def test_create_item(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
     data = {"title": "Foo", "description": "Fighters"}
-    response = await client.post(
+    response = await client_with_test_db.post(
         f"{settings.API_V1_STR}/items/",
         headers=superuser_token_headers,
         json=data,
@@ -30,10 +30,10 @@ async def test_create_item(
 
 
 async def test_read_item(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
     item = await create_random_item(db)
-    response = await client.get(
+    response = await client_with_test_db.get(
         f"{settings.API_V1_STR}/items/{item.id}",
         headers=superuser_token_headers,
     )
@@ -46,9 +46,9 @@ async def test_read_item(
 
 
 async def test_read_item_not_found(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
-    response = await client.get(
+    response = await client_with_test_db.get(
         f"{settings.API_V1_STR}/items/{uuid7str()}",
         headers=superuser_token_headers,
     )
@@ -58,10 +58,10 @@ async def test_read_item_not_found(
 
 
 async def test_read_item_not_enough_permissions(
-    client: AsyncClient, normal_user_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
     item = await create_random_item(db)
-    response = await client.get(
+    response = await client_with_test_db.get(
         f"{settings.API_V1_STR}/items/{item.id}",
         headers=normal_user_token_headers,
     )
@@ -71,11 +71,11 @@ async def test_read_item_not_enough_permissions(
 
 
 async def test_read_items(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
     await create_random_item(db)
     await create_random_item(db)
-    response = await client.get(
+    response = await client_with_test_db.get(
         f"{settings.API_V1_STR}/items/",
         headers=superuser_token_headers,
     )
@@ -85,11 +85,11 @@ async def test_read_items(
 
 
 async def test_update_item(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
     item = await create_random_item(db)
     data = {"title": "Updated title", "description": "Updated description"}
-    response = await client.put(
+    response = await client_with_test_db.put(
         f"{settings.API_V1_STR}/items/{item.id}",
         headers=superuser_token_headers,
         json=data,
@@ -103,10 +103,10 @@ async def test_update_item(
 
 
 async def test_update_item_not_found(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
     data = {"title": "Updated title", "description": "Updated description"}
-    response = await client.put(
+    response = await client_with_test_db.put(
         f"{settings.API_V1_STR}/items/{uuid7str()}",
         headers=superuser_token_headers,
         json=data,
@@ -117,11 +117,11 @@ async def test_update_item_not_found(
 
 
 async def test_update_item_not_enough_permissions(
-    client: AsyncClient, normal_user_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
     item = await create_random_item(db)
     data = {"title": "Updated title", "description": "Updated description"}
-    response = await client.put(
+    response = await client_with_test_db.put(
         f"{settings.API_V1_STR}/items/{item.id}",
         headers=normal_user_token_headers,
         json=data,
@@ -132,10 +132,10 @@ async def test_update_item_not_enough_permissions(
 
 
 async def test_delete_item(
-    client: AsyncClient, superuser_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
     item = await create_random_item(db)
-    response = await client.delete(
+    response = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/items/{item.id}",
         headers=superuser_token_headers,
     )
@@ -145,9 +145,9 @@ async def test_delete_item(
 
 
 async def test_delete_item_not_found(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
-    response = await client.delete(
+    response = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/items/{uuid7str()}",
         headers=superuser_token_headers,
     )
@@ -157,10 +157,10 @@ async def test_delete_item_not_found(
 
 
 async def test_delete_item_not_enough_permissions(
-    client: AsyncClient, normal_user_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
     item = await create_random_item(db)
-    response = await client.delete(
+    response = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/items/{item.id}",
         headers=normal_user_token_headers,
     )

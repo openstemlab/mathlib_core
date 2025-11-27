@@ -133,11 +133,13 @@ async def update_quiz_route(
     """
     Update quiz.
     """
-    quiz = await update_quiz(quiz_id=id, quiz_in=quiz_in, session=session)
+    quiz = await session.get(Quiz, id)
+
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
     if current_user.id == user_id:
-        return quiz
+        updated_quiz = await update_quiz(quiz_id=id, quiz_in=quiz_in, session=session)
+        return updated_quiz
     else:
         raise HTTPException(
             status_code=403, detail="You cant save a quiz for someone else."
@@ -183,8 +185,6 @@ async def start_quiz_route(
         raise HTTPException(
             status_code=403, detail="You can only start quizzes for yourself."
         )
-    if quiz_data.length > 500:
-        raise HTTPException(status_code=422, detail="Quiz length cannot exceed 500.")
     quiz = await start_new_quiz(
         quiz_data=quiz_data, session=session, owner_id=current_user.id
     )
@@ -207,10 +207,10 @@ async def save_quiz_route(
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
 
-    if quiz.status == QuizStatusChoices.SUBMITTED.value:
+    if quiz.status != QuizStatusChoices.ACTIVE.value:
         raise HTTPException(
             status_code=400,
-            detail="Cannot save a submitted quiz.",
+            detail="Cannot save inactive quiz.",
         )
 
     if current_user.id != quiz.owner_id:

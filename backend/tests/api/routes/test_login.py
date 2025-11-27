@@ -16,31 +16,31 @@ from tests.utils.utils import random_email, random_lower_string
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
 
-async def test_get_access_token(client: AsyncClient) -> None:
+async def test_get_access_token(client_with_test_db: AsyncClient) -> None:
     login_data = {
         "username": settings.FIRST_SUPERUSER,
         "password": settings.FIRST_SUPERUSER_PASSWORD,
     }
-    r = await client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = await client_with_test_db.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
     tokens = r.json()
     assert r.status_code == 200
     assert "access_token" in tokens
     assert tokens["access_token"]
 
 
-async def test_get_access_token_incorrect_password(client: AsyncClient) -> None:
+async def test_get_access_token_incorrect_password(client_with_test_db: AsyncClient) -> None:
     login_data = {
         "username": settings.FIRST_SUPERUSER,
         "password": "incorrect",
     }
-    r = await client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = await client_with_test_db.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
     assert r.status_code == 400
 
 
 async def test_use_access_token(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
-    r = await client.post(
+    r = await client_with_test_db.post(
         f"{settings.API_V1_STR}/login/test-token",
         headers=superuser_token_headers,
     )
@@ -50,14 +50,14 @@ async def test_use_access_token(
 
 
 async def test_recovery_password(
-    client: AsyncClient, normal_user_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]
 ) -> None:
     with (
         patch("app.core.config.settings.SMTP_HOST", "smtp.example.com"),
         patch("app.core.config.settings.SMTP_USER", "admin@example.com"),
     ):
         email = "test@example.com"
-        r = await client.post(
+        r = await client_with_test_db.post(
             f"{settings.API_V1_STR}/password-recovery/{email}",
             headers=normal_user_token_headers,
         )
@@ -66,17 +66,17 @@ async def test_recovery_password(
 
 
 async def test_recovery_password_user_not_exits(
-    client: AsyncClient, normal_user_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]
 ) -> None:
     email = "jVgQr@example.com"
-    r = await client.post(
+    r = await client_with_test_db.post(
         f"{settings.API_V1_STR}/password-recovery/{email}",
         headers=normal_user_token_headers,
     )
     assert r.status_code == 404
 
 
-async def test_reset_password(client: AsyncClient, db: AsyncSession) -> None:
+async def test_reset_password(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
     email = random_email()
     password = random_lower_string()
     new_password = random_lower_string()
@@ -91,11 +91,11 @@ async def test_reset_password(client: AsyncClient, db: AsyncSession) -> None:
     user = await create_user(session=db, user_create=user_create)
     token = generate_password_reset_token(email=email)
     headers = await user_authentication_headers(
-        client=client, email=email, password=password
+        client=client_with_test_db, email=email, password=password
     )
     data = {"new_password": new_password, "token": token}
 
-    r = await client.post(
+    r = await client_with_test_db.post(
         f"{settings.API_V1_STR}/reset-password/",
         headers=headers,
         json=data,
@@ -109,10 +109,10 @@ async def test_reset_password(client: AsyncClient, db: AsyncSession) -> None:
 
 
 async def test_reset_password_invalid_token(
-    client: AsyncClient, superuser_token_headers: dict[str, str]
+    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ) -> None:
     data = {"new_password": "changethis", "token": "invalid"}
-    r = await client.post(
+    r = await client_with_test_db.post(
         f"{settings.API_V1_STR}/reset-password/",
         headers=superuser_token_headers,
         json=data,

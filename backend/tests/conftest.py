@@ -15,7 +15,7 @@ from tests.utils.utils import get_superuser_token_headers
 
 @pytest_asyncio.fixture(scope="function")
 async def db() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSession(async_engine) as session:
+    async with AsyncSession(async_engine, expire_on_commit=False) as session:
         await init_db(session)
         await session.commit()
         yield session

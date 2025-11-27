@@ -563,7 +563,7 @@ async def test_start_quiz_invalid_length(
 
     content = response.json()
     assert response.status_code == 422
-    assert content["detail"] == "Quiz length cannot exceed 500."
+
 
 
 async def test_save_quiz_route(
@@ -650,7 +650,7 @@ async def test_save_quiz_submitted_quiz(
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Cannot save a submitted quiz."
+    assert response.json()["detail"] == "Cannot save inactive quiz."
 
 
 async def test_save_quiz_wrong_user(

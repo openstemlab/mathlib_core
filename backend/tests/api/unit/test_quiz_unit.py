@@ -108,15 +108,14 @@ async def test_form_quiz_owner_not_exists_still_works(db: AsyncSession):
 
 
 async def test_deactivate_quizzes(db: AsyncSession):
-    """Tests the deactivate_quizzes function."""
+    """Tests the deactivate_quizzes function. Only 1 active quiz can exist in db so testing with one."""
 
     user = await create_random_user(db)
 
     # Create active quizzes
     active_quiz1 = Quiz(owner_id=user.id, status=QuizStatusChoices.ACTIVE.value)
-    active_quiz2 = Quiz(owner_id=user.id, status=QuizStatusChoices.ACTIVE.value)
     db.add(active_quiz1)
-    db.add(active_quiz2)
+
 
     # Create inactive quiz
     inactive_quiz = Quiz(owner_id=user.id, status=QuizStatusChoices.IN_PROGRESS.value)
@@ -129,11 +128,9 @@ async def test_deactivate_quizzes(db: AsyncSession):
 
     # Refresh quizzes from the database
     await db.refresh(active_quiz1)
-    await db.refresh(active_quiz2)
     await db.refresh(inactive_quiz)
 
     assert active_quiz1.status == QuizStatusChoices.IN_PROGRESS.value
-    assert active_quiz2.status == QuizStatusChoices.IN_PROGRESS.value
     assert (
         inactive_quiz.status == QuizStatusChoices.IN_PROGRESS.value
     )  # Should remain unchanged
@@ -186,7 +183,7 @@ async def test_get_all_quizzes_by_owner(db: AsyncSession):
         exercise = await create_random_exercise(db)
         quiz = Quiz(
             owner_id=user.id,
-            status=QuizStatusChoices.ACTIVE.value,
+            status=QuizStatusChoices.NEW.value,
             exercises=[exercise],
             title=f"Quiz {i + 1}",
         )
@@ -196,7 +193,7 @@ async def test_get_all_quizzes_by_owner(db: AsyncSession):
     other_user = await create_random_user(db)
     other_quiz = Quiz(
         owner_id=other_user.id,
-        status=QuizStatusChoices.ACTIVE.value,
+        status=QuizStatusChoices.NEW.value,
         title="Other User Quiz",
     )
     db.add(other_quiz)
@@ -550,38 +547,6 @@ async def test_load_active_quiz_returns_none_for_in_progress_quiz(db: AsyncSessi
 
     active = await load_active_quiz(session=db, owner_id=user.id)
     assert active is None
-
-
-async def test_load_active_quiz_returns_oldest_when_multiple_active(db: AsyncSession):
-    user = await create_random_user(db)
-
-    # Create two exercises
-    ex1 = await create_random_exercise(db)
-    ex2 = await create_random_exercise(db)
-
-    # Create quiz1 (older ID), then quiz2 (newer ID)
-    quiz1 = Quiz(owner_id=user.id, status=QuizStatusChoices.ACTIVE.value)
-    quiz2 = Quiz(owner_id=user.id, status=QuizStatusChoices.ACTIVE.value)
-
-    db.add(quiz1)
-    db.add(quiz2)
-    await db.flush()  # Assign IDs (uuid7str is time-ordered)
-
-    # Link exercises
-    qe1 = QuizExercise(quiz_id=quiz1.id, exercise_id=ex1.id, position=0)
-    qe2 = QuizExercise(quiz_id=quiz2.id, exercise_id=ex2.id, position=0)
-    db.add(qe1)
-    db.add(qe2)
-    await db.flush()
-
-    # Load active quiz
-    result = await load_active_quiz(session=db, owner_id=user.id)
-
-    # Should return quiz1 (older ID)
-    assert result is not None
-    assert result.id == quiz1.id
-    assert len(result.exercises) == 1
-    assert result.exercises[0].exercise.id == ex1.id
 
 
 async def test_load_active_quiz_returns_empty_exercises_when_quiz_has_no_exercises(
