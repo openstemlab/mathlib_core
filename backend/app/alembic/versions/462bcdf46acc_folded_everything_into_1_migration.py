@@ -1,18 +1,18 @@
-"""changing_id_to_string
+"""folded everything into 1 migration
 
-Revision ID: 8268785014a1
-Revises: 1eb4e02d4b21
-Create Date: 2025-10-22 15:03:06.666727
+Revision ID: 462bcdf46acc
+Revises: 
+Create Date: 2025-11-27 15:18:42.495310
 
 """
 from alembic import op
 import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
-
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '8268785014a1'
-down_revision = '1eb4e02d4b21'
+revision = '462bcdf46acc'
+down_revision = None
 branch_labels = None
 depends_on = None
 
@@ -23,20 +23,13 @@ def upgrade():
     sa.Column('source_name', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False),
     sa.Column('source_id', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False),
     sa.Column('text', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('answers', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column('illustration', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column('tags', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('solution', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-    sa.Column('false_answers', sa.JSON(), nullable=False),
-    sa.Column('formula', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-    sa.Column('illustration', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-    sa.Column('id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_table('tag',
-    sa.Column('name', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False),
-    sa.Column('description', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-    sa.Column('id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_tag_name'), 'tag', ['name'], unique=True)
     op.create_table('user',
     sa.Column('email', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
@@ -47,13 +40,6 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_user_email'), 'user', ['email'], unique=True)
-    op.create_table('exercisetag',
-    sa.Column('exercise_id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-    sa.Column('tag_id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-    sa.ForeignKeyConstraint(['exercise_id'], ['exercise.id'], ),
-    sa.ForeignKeyConstraint(['tag_id'], ['tag.id'], ),
-    sa.PrimaryKeyConstraint('exercise_id', 'tag_id')
-    )
     op.create_table('item',
     sa.Column('title', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False),
     sa.Column('description', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=True),
@@ -63,18 +49,28 @@ def upgrade():
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('quiz',
-    sa.Column('is_active', sa.Boolean(), nullable=False),
+    sa.Column('title', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=True),
     sa.Column('id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('owner_id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('status', sa.String(), nullable=False),
     sa.ForeignKeyConstraint(['owner_id'], ['user.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('quizexercise',
     sa.Column('quiz_id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('exercise_id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-    sa.ForeignKeyConstraint(['exercise_id'], ['exercise.id'], ),
-    sa.ForeignKeyConstraint(['quiz_id'], ['quiz.id'], ),
+    sa.Column('position', sa.Integer(), nullable=False),
+    sa.Column('is_correct', sa.Boolean(), nullable=True),
+    sa.ForeignKeyConstraint(['exercise_id'], ['exercise.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['quiz_id'], ['quiz.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('quiz_id', 'exercise_id')
+    )
+    op.create_index(
+    'idx_active_quiz_per_user',
+    'quiz',
+    ['owner_id'],
+    unique=True,
+    postgresql_where=sa.sql.text("status = 'active'")
     )
     # ### end Alembic commands ###
 
@@ -84,10 +80,8 @@ def downgrade():
     op.drop_table('quizexercise')
     op.drop_table('quiz')
     op.drop_table('item')
-    op.drop_table('exercisetag')
     op.drop_index(op.f('ix_user_email'), table_name='user')
     op.drop_table('user')
-    op.drop_index(op.f('ix_tag_name'), table_name='tag')
-    op.drop_table('tag')
     op.drop_table('exercise')
+    op.drop_index('idx_active_quiz_per_user')
     # ### end Alembic commands ###
