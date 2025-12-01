@@ -507,6 +507,8 @@ class Quiz(QuizBase, table=True):
         back_populates="quiz",
         sa_relationship_kwargs={"lazy": "selectin", "overlaps": "exercises,quizzes"},
     )
+    module_id: str|None = Field(default=None, foreign_key="module.id")
+    module:"Module"|None=Relationship(back_populates="quizzes")
 
 
 class QuizExerciseData(SQLModel):
@@ -635,6 +637,10 @@ class Course(CourseBase, table=True):
     id: str = Field(default_factory=uuid7str, primary_key=True)
     author_id: str = Field(foreign_key="user.id")
     author: User = Relationship()
+    modules: list["Module"] = Relationship(
+        back_populates="course",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
 
 
 class CoursePublic(CourseBase):
@@ -645,9 +651,11 @@ class CoursePublic(CourseBase):
         author_id: Unique identifier for the user who created the course.
         title: Title of the course.
         description: Optional description of the course.
+        modules: list of Module ids representing modules in the course
     """
     id: str
     author_id: str
+    modules:list[str]=Field(default_factory=list)
 
 
 class CoursesPublic(SQLModel):
@@ -678,6 +686,9 @@ class ModuleBase(SQLModel):
 
 class ModuleCreate(ModuleBase):
     """Model for creating a new module."""
+    attachments:list[str]|None = None
+    quizzes:list[str]|None = None
+    course_id:str
     pass
 
 
@@ -694,6 +705,8 @@ class ModuleUpdate(ModuleBase):
     content:str|None = None
     order:int|None = None
     is_draft:bool|None = None
+    attachments:list[str]|None = None
+    quizzes:list[str]|None = None
 
 
 class Module(ModuleBase, table=True):
@@ -715,7 +728,10 @@ class Module(ModuleBase, table=True):
     released_at: datetime|None = None
     course_id: str = Field(foreign_key="course.id")
     course: Course = Relationship(back_populates="modules")
-    attachments: list["Attachment"] = Relationship(back_populates="module")
+    attachments: list["Attachment"]|None = Relationship(back_populates="module")
+    quizzes: list["Quiz"]|None = Relationship(
+        back_populates="module",
+        sa_relationship_kwargs={"lazy":"selectin"})
     progress: list["UserModuleProgress"] = Relationship(back_populates="module")
 
 
@@ -725,15 +741,17 @@ class ModulePublic(ModuleBase):
     Attributes:
         id: Unique identifier for the module.
         course_id: Unique identifier for the course.
-        attachments: List of AttachmentPublic objects representing attachments in the module.
+        attachments: List of Attachment ids representing attachments in the module.
         title: Title of the module.
         content: Content of the module.
         order: Position of the module in the course.
         is_draft: Flag indicating if the module is a draft.
+        quizzes: List of Quiz ids representing quizzes in the module.
     """
     id: str
     course_id: str
-    attachments: list["Attachment"] = Field(default_factory=list)
+    attachments: list[str] = Field(default_factory=list) #list of attachment ids
+    quizzes:list[str]=Field(default_factory=list)
 
 
 class ModulesPublic(SQLModel):
