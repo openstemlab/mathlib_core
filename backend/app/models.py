@@ -1,5 +1,6 @@
 from uuid_extensions import uuid7str
 from enum import Enum
+from datetime import datetime
 
 from pydantic import EmailStr
 from sqlmodel import Field, Relationship, SQLModel
@@ -111,6 +112,11 @@ class User(UserBase, table=True):
     )
     quizzes: list["Quiz"] = Relationship(
         back_populates="owner",
+        cascade_delete=True,
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+    modules: list["UserModuleProgress"] = Relationship(
+        back_populates="user",
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
@@ -579,3 +585,274 @@ class StartQuizRequest(SQLModel):
     tags: list[str] | None = Field(default_factory=list)
     length: int = Field(default=5, le=500)
     title: str | None = Field(default=None, max_length=255)
+
+
+class CourseBase(SQLModel):
+    """Base model for courses.
+    
+    Attributes:
+        title: Title of the course.
+        description: Optional description of the course.
+    """
+    title: str
+    description: str|None = None
+
+
+class CourseCreate(CourseBase):
+    """Model for creating a new course.
+    
+    Attributes:
+        author_id: Unique identifier for the user who created the course.
+        description: Optional description of the course.
+        title: Title of the course.
+    """
+    author_id: str
+
+
+class CourseUpdate(CourseBase):
+    """Model for updating an existing course.
+    
+    Attributes:
+        title: Title of the course, optional.
+        description: Description of the course, optional.
+    """
+    title: str | None = None
+    description: str | None = None
+
+
+class Course(CourseBase, table=True):
+    """Database model for a Course. Inherits from CourseBase.
+    
+    Attributes:
+        id: Unique identifier for the course.
+        author_id: Unique identifier for the user who created the course.
+        author: Relationship to the user who created the course.
+        modules: Relationship to the modules in the course.
+        title: Title of the course.
+        description: Optional description of the course.
+    """
+
+    id: str = Field(default_factory=uuid7str, primary_key=True)
+    author_id: str = Field(foreign_key="user.id")
+    author: User = Relationship()
+
+
+class CoursePublic(CourseBase):
+    """Public representation of a Course. Inherits from CourseBase.
+
+    Attributes:
+        id: Unique identifier for the course.
+        author_id: Unique identifier for the user who created the course.
+        title: Title of the course.
+        description: Optional description of the course.
+    """
+    id: str
+    author_id: str
+
+
+class CoursesPublic(SQLModel):
+    """Public representation for a list of Courses.
+
+    Attributes:
+        data: List of CoursePublic objects.
+        count: Total number of courses.
+    """
+    data: list[CoursePublic]
+    count: int
+
+
+class ModuleBase(SQLModel):
+    """Base model for modules.
+    
+    Attributes:
+        title: Title of the module.
+        content: Content of the module.
+        order: Position of the module in the course.
+        is_draft: Flag indicating if the module is a draft.
+    """
+    title: str
+    content: str
+    order: int
+    is_draft: bool = True
+
+
+class ModuleCreate(ModuleBase):
+    """Model for creating a new module."""
+    pass
+
+
+class ModuleUpdate(ModuleBase):
+    """Model for updating an existing module.
+    
+    Attributes:
+        title: Optional, title of the module.
+        content: Optional, content of the module.
+        order: Optional, position of the module in the course.
+        is_draft: Optional, flag indicating if the module is a draft.
+    """
+    title:str|None = None
+    content:str|None = None
+    order:int|None = None
+    is_draft:bool|None = None
+
+
+class Module(ModuleBase, table=True):
+    """Database model for a Module. Inherits from ModuleBase.
+    
+    Attributes:
+        id: Unique identifier for the module.
+        course_id: Unique identifier for the course.
+        course: Relationship to the course.
+        title: Title of the module.
+        content: Content of the module.
+        order: Position of the module in the course.
+        released_at: Date and time when the module will be available.
+        is_draft: Flag indicating if the module is a draft.
+        attachments: Relationship to the attachments in the module.
+        progress: Relationship to the progress of the module for users.
+    """
+    id: str = Field(default_factory=uuid7str, primary_key=True)
+    released_at: datetime|None = None
+    course_id: str = Field(foreign_key="course.id")
+    course: Course = Relationship(back_populates="modules")
+    attachments: list["Attachment"] = Relationship(back_populates="module")
+    progress: list["UserModuleProgress"] = Relationship(back_populates="module")
+
+
+class ModulePublic(ModuleBase):
+    """Public representation of a Module. Inherits from ModuleBase.
+
+    Attributes:
+        id: Unique identifier for the module.
+        course_id: Unique identifier for the course.
+        attachments: List of AttachmentPublic objects representing attachments in the module.
+        title: Title of the module.
+        content: Content of the module.
+        order: Position of the module in the course.
+        is_draft: Flag indicating if the module is a draft.
+    """
+    id: str
+    course_id: str
+    attachments: list["Attachment"] = Field(default_factory=list)
+
+
+class ModulesPublic(SQLModel):
+    """Public representation for a list of Modules.
+
+    Attributes:
+        data: List of ModulePublic objects.
+        count: Total number of modules.
+    """
+    data: list[ModulePublic]
+    count: int
+
+class AttachmentBase(SQLModel):
+    """Base model for attachments.
+    
+    Attributes:
+        title: Title of the attachment.
+        file_url: URL to the attachment file.
+        type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
+        order: Position of the attachment in the module.
+    """
+    title: str
+    file_url: str
+    type: str
+    order: int = 0
+
+
+class AttachmentCreate(AttachmentBase):
+    """Model for creating new Attachment.
+    
+    Attributes:
+        file_url: URL to the attachment file.
+        module_id: Unique identifier for the module.
+        title: Title of the attachment.
+        type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
+        order: Position of the attachment in the module.
+    """
+    module_id: str
+
+class AttachmentUpdate(AttachmentBase):
+    """Model for updating an existing Attachment.
+    
+    Attributes:
+        title: Optional, title of the attachment.
+        file_url: Optional, URL to the attachment file.
+        type: Optional, type of the attachment.
+        order: Optional, position of the attachment in the module.
+        module_id: Optional, unique identifier for the module.
+    """
+    title: str | None = None
+    file_url: str | None = None
+    type: str | None = None
+    order: int | None = None
+    module_id: str | None = None
+
+class Attachment(AttachmentBase, table=True):
+    """Database model for an Attachment. Inherits from AttachmentBase.
+    
+    Attributes:
+        id: Unique identifier for the attachment.
+        module_id: Unique identifier for the module.
+        module: Relationship to the module.
+        title: Title of the attachment.
+        file_url: URL to the attachment file.
+        type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
+        order: Position of the attachment in the module.
+    """
+
+    id: str = Field(default_factory=uuid7str, primary_key=True)
+    module_id: str = Field(foreign_key="module.id")
+    module: Module = Relationship(back_populates="attachments")
+
+
+class AttachmentPublic(AttachmentBase):
+    """Public representation of an Attachment. Inherits from AttachmentBase.
+    
+    Attributes:
+        id: Unique identifier for the attachment.
+        module_id: Unique identifier for the module.
+        title: Title of the attachment.
+        file_url: URL to the attachment file.
+        type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
+        order: Position of the attachment in the module.
+    """
+    id: str
+    module_id: str
+
+class AttachmentsPublic(SQLModel):
+    """List of AttachmentPublic objects.
+    
+    Attributes:
+        data: List of AttachmentPublic objects.
+        count: Total number of attachments.
+    """
+    data: list[AttachmentPublic]
+    count: int
+
+class UserModuleProgress(SQLModel, table=True):
+    """Link model for keeping users progress of modules.
+    
+    Attributes:
+        id: Unique identifier for the progress record.
+        user_id: Unique identifier for the user.
+        module_id: Unique identifier for the module.
+        started_at: Timestamp when the user started the module.
+        last_accessed: Timestamp of the last access to the module.
+        completed_at: Timestamp when the module was completed.
+        is_completed: Flag indicating if the module is completed.
+        user: Relationship to the user.
+        module: Relationship to the module.
+    """
+    id: str = Field(default=None, primary_key=True)
+    user_id: str = Field(foreign_key="user.id")
+    module_id: str = Field(foreign_key="module.id")
+    started_at: datetime = Field(default_factory=datetime.now(datetime.timezone.utc))
+    last_accessed: datetime = Field(default_factory=datetime.now(datetime.timezone.utc))
+    completed_at: datetime|None = None
+    is_completed: bool = False
+
+    user: User = Relationship(back_populates="modules")
+    module: Module = Relationship(back_populates="progress")
+
