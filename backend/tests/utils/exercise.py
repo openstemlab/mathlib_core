@@ -1,0 +1,26 @@
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.models import Exercise
+from tests.utils.utils import random_lower_string
+
+
+async def create_random_exercise(db: AsyncSession, tags=None) -> Exercise:
+    """Creates a randomised exercise."""
+    if tags is None:
+        tags = [random_lower_string()]
+
+    source_name = random_lower_string()
+    source_id = random_lower_string()
+    text = random_lower_string()
+    solution = random_lower_string()
+    exercise = Exercise(
+        source_name=source_name,
+        source_id=source_id,
+        text=text,
+        solution=solution,
+        tags=tags,
+    )
+    db.add(exercise)
+    await db.flush()
+    await db.refresh(exercise)
+    return exercise
