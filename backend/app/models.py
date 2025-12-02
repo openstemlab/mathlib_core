@@ -120,6 +120,10 @@ class User(UserBase, table=True):
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+    enrolled_courses:list["Course"]=Relationship(
+        back_populates="attendants",
+        sa_relationship_kwargs={"lazy":"selectin"},
+    )
 
 
 # Properties to return via API, id is always required
@@ -617,9 +621,11 @@ class CourseUpdate(CourseBase):
     Attributes:
         title: Title of the course, optional.
         description: Description of the course, optional.
+        attendants: list of ids of users enrolled in the course.
     """
     title: str | None = None
     description: str | None = None
+    attendants:list[str]|None = None
 
 
 class Course(CourseBase, table=True):
@@ -632,6 +638,7 @@ class Course(CourseBase, table=True):
         modules: Relationship to the modules in the course.
         title: Title of the course.
         description: Optional description of the course.
+        attendants: list of users enrolled in the course.
     """
 
     id: str = Field(default_factory=uuid7str, primary_key=True)
@@ -641,6 +648,12 @@ class Course(CourseBase, table=True):
         back_populates="course",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+    module_ids: list[str]=Field(default_factory=list)
+    attendants:list["User"]=Relationship(
+        back_populates="enrolled_courses",
+        sa_relationship_kwargs={"lazy":"selectin"},
+    )
+    attendant_ids:list[str]=Field(default_factory=list)
 
 
 class CoursePublic(CourseBase):
@@ -655,7 +668,8 @@ class CoursePublic(CourseBase):
     """
     id: str
     author_id: str
-    modules:list[str]=Field(default_factory=list)
+    module_ids:list[str]=Field(default_factory=list)
+    attendant_ids:list[str]=Field(default_factory=list)
 
 
 class CoursesPublic(SQLModel):

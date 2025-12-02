@@ -11,6 +11,7 @@ from app.models import (
     ModulePublic, 
     ModulesPublic, 
     Message,
+    Quiz,
 )
 
 
