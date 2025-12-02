@@ -8,6 +8,8 @@ import emails  # type: ignore
 import jwt
 from jinja2 import Template
 from jwt.exceptions import InvalidTokenError
+from sqlmodel import select
+from fastapi import HTTPException
 
 from app.core import security
 from app.core.config import settings
@@ -121,3 +123,30 @@ def verify_password_reset_token(token: str) -> str | None:
         return str(decoded_token["sub"])
     except InvalidTokenError:
         return None
+
+
+async def _get_objects_by_id(model_type, id_list, session):
+    """
+    Resolves a list of IDs to ORM objects.
+    Handles:
+        - id_list is None → returns None
+        - id_list is [] → returns []
+        - id_list has IDs → returns list of objects or raises 404 if any missing
+    """
+    if id_list is None:
+        return None
+    if not id_list:
+        return []
+
+    statement = select(model_type).where(model_type.id.in_(id_list))
+    db_objects = (await session.exec(statement)).all()
+
+    found_ids = {obj.id for obj in db_objects}
+    missing = set(id_list) - found_ids
+    if missing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{model_type.__name__} not found: {missing}"
+        )
+
+    return db_objects

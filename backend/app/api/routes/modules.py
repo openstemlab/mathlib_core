@@ -13,6 +13,7 @@ from app.models import (
     Message,
     Quiz,
 )
+from app.utils import _get_objects_by_id
 
 
 router = APIRouter(prefix="/modules", tags=["modules"])
@@ -87,24 +88,10 @@ async def create_module_route(session:SessionDep, current_user: CurrentUser, mod
         raise HTTPException(status_code=404, detail="Course not found.")
 
     # Fetch attachments if provided
-    attachments = []
-    if module_in.attachments:
-        statement = select(Attachment).where(Attachment.id.in_(module_in.attachments))
-        db_attachments = (await session.exec(statement)).all()
-        if len(db_attachments) != len(module_in.attachments):
-            missing = set(module_in.attachments) - {att.id for att in db_attachments}
-            raise HTTPException(status_code=404, detail=f"Attachments not found: {missing}")
-        attachments = db_attachments
+    attachments = _get_objects_by_id(Attachment, module_in.attachments, session)
 
     # Fetch quizzes if provided
-    quizzes = []
-    if module_in.quizzes:
-        statement = select(Quiz).where(Quiz.id.in_(module_in.quizzes))
-        db_quizzes = (await session.exec(statement)).all()
-        if len(db_quizzes) != len(module_in.quizzes):
-            missing = set(module_in.quizzes) - {q.id for q in db_quizzes}
-            raise HTTPException(status_code=404, detail=f"Quizzes not found: {missing}")
-        quizzes = db_quizzes
+    quizzes = _get_objects_by_id(Quiz, module_in.quizzes, session)
 
     # Now create the module
     module = Module(
@@ -154,34 +141,11 @@ async def update_module_route(
 
     # 2. Update attachments if provided
     if "attachments" in module_in.model_fields_set:  # explicitly passed in request
-        if module_in.attachments is not None:
-            # Fetch and validate attachment objects
-            if module_in.attachments:
-                statement = select(Attachment).where(Attachment.id.in_(module_in.attachments))
-                db_attachments = (await session.exec(statement)).all()
-                if len(db_attachments) != len(module_in.attachments):
-                    missing = set(module_in.attachments) - {att.id for att in db_attachments}
-                    raise HTTPException(status_code=404, detail=f"Attachments not found: {missing}")
-                module.attachments = db_attachments
-            else:
-                module.attachments = []  # empty list means clear all
-        else:
-            module.attachments = None  # if null sent, set to null
+        module.attachments = await _get_objects_by_id(Attachment, module_in.attachments, session)
 
     # 3. Update quizzes if provided
     if "quizzes" in module_in.model_fields_set:  # explicitly passed
-        if module_in.quizzes is not None:
-            if module_in.quizzes:
-                statement = select(Quiz).where(Quiz.id.in_(module_in.quizzes))
-                db_quizzes = (await session.exec(statement)).all()
-                if len(db_quizzes) != len(module_in.quizzes):
-                    missing = set(module_in.quizzes) - {q.id for q in db_quizzes}
-                    raise HTTPException(status_code=404, detail=f"Quizzes not found: {missing}")
-                module.quizzes = db_quizzes
-            else:
-                module.quizzes = []  # clear all
-        else:
-            module.quizzes = None  # set to null
+        module.quizzes = await _get_objects_by_id(Quiz, module_in.quizzes, session)
 
     session.add(module)
     await session.flush()
