@@ -1,11 +1,28 @@
+
 from uuid_extensions import uuid7str
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
+
 
 from pydantic import EmailStr
 from sqlmodel import Field, Relationship, SQLModel
 from sqlalchemy import Column, String, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB
+
+
+
+# Join table: Course <-> User (enrollments)
+class CourseEnrollment(SQLModel, table=True):
+    __tablename__ = "courseenrollment"
+    course_id: str = Field(foreign_key="course.id", primary_key=True)
+    user_id: str = Field(foreign_key="user.id", primary_key=True)
+
+
+# Join table: Course <-> Module (module order in course)
+class CourseModuleLink(SQLModel, table=True):
+    __tablename__ = "coursemodules"
+    course_id: str = Field(foreign_key="course.id", primary_key=True)
+    module_id: str = Field(foreign_key="module.id", primary_key=True)
 
 
 # Shared properties
@@ -122,6 +139,7 @@ class User(UserBase, table=True):
     )
     enrolled_courses:list["Course"]=Relationship(
         back_populates="attendants",
+        link_model=CourseEnrollment,
         sa_relationship_kwargs={"lazy":"selectin"},
     )
 
@@ -512,7 +530,7 @@ class Quiz(QuizBase, table=True):
         sa_relationship_kwargs={"lazy": "selectin", "overlaps": "exercises,quizzes"},
     )
     module_id: str|None = Field(default=None, foreign_key="module.id")
-    module:"Module"|None=Relationship(back_populates="quizzes")
+    module: "Module" =Relationship(back_populates="quizzes")
 
 
 class QuizExerciseData(SQLModel):
@@ -612,7 +630,7 @@ class CourseCreate(CourseBase):
         description: Optional description of the course.
         title: Title of the course.
     """
-    author_id: str
+    author_id: str|None = None
 
 
 class CourseUpdate(CourseBase):
@@ -643,17 +661,30 @@ class Course(CourseBase, table=True):
 
     id: str = Field(default_factory=uuid7str, primary_key=True)
     author_id: str = Field(foreign_key="user.id")
-    author: User = Relationship()
+    author: User = Relationship(
+        sa_relationship_kwargs=({
+            "lazy": "selectin",
+            "foreign_keys": "Course.author_id"
+            }),
+    )
     modules: list["Module"] = Relationship(
         back_populates="course",
+        link_model=CourseModuleLink,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
-    module_ids: list[str]=Field(default_factory=list)
+    module_ids: list[str]=Field(
+        default_factory=list,
+        sa_column=Column(JSONB)
+    )
     attendants:list["User"]=Relationship(
         back_populates="enrolled_courses",
+        link_model=CourseEnrollment,
         sa_relationship_kwargs={"lazy":"selectin"},
     )
-    attendant_ids:list[str]=Field(default_factory=list)
+    attendant_ids:list[str]=Field(
+        default_factory=list,
+        sa_column=Column(JSONB)
+        )
 
 
 class CoursePublic(CourseBase):
@@ -664,7 +695,8 @@ class CoursePublic(CourseBase):
         author_id: Unique identifier for the user who created the course.
         title: Title of the course.
         description: Optional description of the course.
-        modules: list of Module ids representing modules in the course
+        module_ids: list of Module ids representing modules in the course
+        attendant_ids: list of User ids representing users enrolled in the course
     """
     id: str
     author_id: str
@@ -681,6 +713,11 @@ class CoursesPublic(SQLModel):
     """
     data: list[CoursePublic]
     count: int
+
+
+
+
+
 
 
 class ModuleBase(SQLModel):
@@ -741,11 +778,24 @@ class Module(ModuleBase, table=True):
     id: str = Field(default_factory=uuid7str, primary_key=True)
     released_at: datetime|None = None
     course_id: str = Field(foreign_key="course.id")
-    course: Course = Relationship(back_populates="modules")
-    attachments: list["Attachment"]|None = Relationship(back_populates="module")
-    quizzes: list["Quiz"]|None = Relationship(
+    course: Course = Relationship(
+        back_populates="modules", 
+        link_model=CourseModuleLink,
+        sa_relationship_kwargs={"lazy":"selectin"},
+        )
+    attachments: list["Attachment"] = Relationship(back_populates="module")
+    attachment_ids: list[str]=Field(
+        default_factory=list,
+        sa_column=Column(JSONB)
+    )
+    quizzes: list["Quiz"] = Relationship(
         back_populates="module",
-        sa_relationship_kwargs={"lazy":"selectin"})
+        sa_relationship_kwargs={"lazy":"selectin"},
+        )
+    quiz_ids: list[str]=Field(
+        default_factory=list,
+        sa_column=Column(JSONB)
+    )
     progress: list["UserModuleProgress"] = Relationship(back_populates="module")
 
 
@@ -880,8 +930,8 @@ class UserModuleProgress(SQLModel, table=True):
     id: str = Field(default=None, primary_key=True)
     user_id: str = Field(foreign_key="user.id")
     module_id: str = Field(foreign_key="module.id")
-    started_at: datetime = Field(default_factory=datetime.now(datetime.timezone.utc))
-    last_accessed: datetime = Field(default_factory=datetime.now(datetime.timezone.utc))
+    started_at: datetime = Field(default_factory=datetime.now(timezone.utc))
+    last_accessed: datetime = Field(default_factory=datetime.now(timezone.utc))
     completed_at: datetime|None = None
     is_completed: bool = False
 

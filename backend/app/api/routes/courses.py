@@ -12,7 +12,7 @@ from app.models import (
 )
 
 
-router = APIRouter()
+router = APIRouter(prefix="/courses", tags=["courses"])
 
 
 @router.post("/", response_model=CoursePublic, status_code=status.HTTP_201_CREATED)
@@ -27,7 +27,7 @@ async def create_course_route(
     Only authenticated users can create a course.
     The current user becomes the author.
     """
-    course = Course.model_validate(course_in, update={"author_id": current_user.id})
+    course = Course.model_validate(course_in)
     session.add(course)
     await session.flush()
     await session.refresh(course)
@@ -45,8 +45,8 @@ async def read_courses_route(
     Retrieve courses with pagination.
     """
     statement = select(Course)
-    courses = session.exec(statement.offset(skip).limit(limit)).all()
-    count = session.exec(select(Course)).count()
+    courses = (await session.exec(statement.offset(skip).limit(limit))).all()
+    count = len(courses)
     courses_public = [CoursePublic.model_validate(course) for course in courses]
     return CoursesPublic(data=courses_public, count=count)
 
@@ -60,7 +60,7 @@ async def read_course_route(
     """
     Get a specific course by ID.
     """
-    course = session.get(Course, course_id)
+    course = await session.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     return CoursePublic.model_validate(course)
@@ -78,7 +78,7 @@ async def update_course(
     Update a course.
     Only the author can update their course.
     """
-    course = session.get(Course, course_id)
+    course = await session.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     if course.author_id != current_user.id:
@@ -103,7 +103,7 @@ async def delete_course_route(
     Delete a course by ID.
     Only the author can delete their course.
     """
-    course = session.get(Course, course_id)
+    course = await session.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     if course.author_id != current_user.id:
@@ -123,19 +123,19 @@ async def enroll_in_course_route(
     """
     Enroll the current user in a course.
     """
-    course = session.get(Course, course_id)
+    course = await session.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    user = session.get(User, current_user.id)
+    user = await session.get(User, current_user.id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if course_id in user.enrolled_courses:
+    if course in user.enrolled_courses:
         raise HTTPException(status_code=400, detail="User already enrolled in this course")
 
     user.enrolled_courses.append(course)
-    course.attendants.append(user)
+    
 
     session.add(user)
     session.add(course)
