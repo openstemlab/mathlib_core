@@ -10,6 +10,7 @@ from app.api.routes import (
     quizzes,
     modules,
     courses,
+    attachments,
 )
 from app.core.config import settings
 
@@ -22,6 +23,7 @@ api_router.include_router(exercises.router)
 api_router.include_router(quizzes.router)
 api_router.include_router(modules.router)
 api_router.include_router(courses.router)
+api_router.include_router(attachments.router)
 
 
 if settings.ENVIRONMENT == "local":
