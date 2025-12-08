@@ -10,27 +10,32 @@ from tests.utils.user import create_random_user, user_authentication_headers
 
 pytestmark = pytest.mark.asyncio()
 
-async def test_create_course(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
-):
+async def test_create_course(client_with_test_db: AsyncClient, db: AsyncSession):
     user = await create_random_user(db)
-    data = {"title": "Math 101", "description": "Intro to Mathematics", "author_id": user.id}
+    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    data = {"title": "Math 101", "description": "Intro to Mathematics"}
 
     response = await client_with_test_db.post(
         f"{settings.API_V1_STR}/courses/",
         json=data,
-        headers=normal_user_token_headers,
+        headers=headers,
     )
     assert response.status_code == 201
     content = response.json()
     assert content["title"] == data["title"]
     assert content["description"] == data["description"]
-    assert "id" in content
+    assert content["author_id"] == str(user.id)
 
-    # Verify in DB
-    course_in_db = await db.get(Course, content["id"])
-    assert course_in_db is not None
-    assert course_in_db.author_id == content["author_id"]
+
+async def test_create_course_unauthenticated(client_with_test_db: AsyncClient):
+    data = {"title": "Chemistry 101", "description": "Intro to Chemistry"}
+
+    response = await client_with_test_db.post(
+        f"{settings.API_V1_STR}/courses/",
+        json=data,
+    )
+    assert response.status_code == 401
+
 
 
 async def test_read_courses_pagination(
@@ -81,10 +86,10 @@ async def test_read_course_not_found(client_with_test_db: AsyncClient, normal_us
 async def test_update_course_as_author(
     client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
 ):
-    user_response = await client_with_test_db.get(f"{settings.API_V1_STR}/users/me", headers=normal_user_token_headers)
-    user_id = user_response.json()["id"]
+    user = await create_random_user(db)
+    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
 
-    course = Course(title="Old Title", description="Old Desc", author_id=user_id)
+    course = Course(title="Old Title", description="Old Desc", author_id=user.id)
     db.add(course)
     await db.flush()
     await db.refresh(course)
@@ -94,7 +99,7 @@ async def test_update_course_as_author(
     response = await client_with_test_db.put(
         f"{settings.API_V1_STR}/courses/{course.id}",
         json=update_data,
-        headers=normal_user_token_headers,
+        headers=headers,
     )
     assert response.status_code == 200
     content = response.json()
@@ -105,10 +110,9 @@ async def test_update_course_as_author(
 async def test_update_course_as_non_author(
     client_with_test_db: AsyncClient,
     normal_user_token_headers: dict[str, str],
-    superuser_token_headers: dict[str, str],
     db: AsyncSession,
 ):
-    # Create course with normal user as author
+
     user = await create_random_user(db)
     course = Course(title="My Course", author_id=user.id) 
     db.add(course)
@@ -117,11 +121,10 @@ async def test_update_course_as_non_author(
 
     update_data = {"title": "Hacked Title"}
 
-    # Superuser tries to update but isn't author
     response = await client_with_test_db.put(
         f"{settings.API_V1_STR}/courses/{course.id}",
         json=update_data,
-        headers=superuser_token_headers,
+        headers=normal_user_token_headers,
     )
     assert response.status_code == 403
     assert response.json()["detail"] == "Not enough permissions"
@@ -157,10 +160,9 @@ async def test_delete_course_not_found(client_with_test_db: AsyncClient, normal_
     assert response.json()["detail"] == "Course not found"
 
 
-async def test_delete_course_not_authorized(
+async def test_delete_course_not_author(
     client_with_test_db: AsyncClient,
     normal_user_token_headers: dict[str, str],
-    superuser_token_headers: dict[str, str],
     db: AsyncSession,
 ):
     user = await create_random_user(db)
@@ -169,7 +171,8 @@ async def test_delete_course_not_authorized(
     await db.flush()
 
     response = await client_with_test_db.delete(
-        f"{settings.API_V1_STR}/courses/{course.id}", headers=normal_user_token_headers
+        f"{settings.API_V1_STR}/courses/{course.id}", 
+        headers=normal_user_token_headers
     )
     assert response.status_code == 403
     assert response.json()["detail"] == "Not enough permissions"

@@ -27,11 +27,19 @@ async def create_course_route(
     Only authenticated users can create a course.
     The current user becomes the author.
     """
-    course = Course.model_validate(course_in)
-    session.add(course)
-    await session.flush()
-    await session.refresh(course)
-    return CoursePublic.model_validate(course)
+    try:
+        
+        course = Course(
+            title=course_in.title,
+            description=course_in.description,
+            author_id=current_user.id,
+        )
+        session.add(course)
+        await session.flush()
+        await session.refresh(course)
+        return CoursePublic.model_validate(course)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/", response_model=CoursesPublic)
@@ -84,12 +92,15 @@ async def update_course(
     if course.author_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    update_dict = course_in.model_dump(exclude_unset=True)
-    course.sqlmodel_update(update_dict)
-    session.add(course)
-    await session.flush()
-    await session.refresh(course)
-    return CoursePublic.model_validate(course)
+    try:
+        update_dict = course_in.model_dump(exclude_unset=True)
+        course.sqlmodel_update(update_dict)
+        session.add(course)
+        await session.flush()
+        await session.refresh(course)
+        return CoursePublic.model_validate(course)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/{course_id}", response_model=dict)

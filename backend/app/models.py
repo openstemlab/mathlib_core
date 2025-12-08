@@ -626,11 +626,10 @@ class CourseCreate(CourseBase):
     """Model for creating a new course.
     
     Attributes:
-        author_id: Unique identifier for the user who created the course.
         description: Optional description of the course.
         title: Title of the course.
     """
-    author_id: str|None = None
+    pass
 
 
 class CourseUpdate(CourseBase):
