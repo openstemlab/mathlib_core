@@ -5,9 +5,12 @@ from datetime import datetime, timezone
 
 
 from pydantic import EmailStr
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship, SQLModel, select
 from sqlalchemy import Column, String, CheckConstraint
+from sqlalchemy.orm import selectinload
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 
 
 
@@ -671,19 +674,12 @@ class Course(CourseBase, table=True):
         link_model=CourseModuleLink,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
-    module_ids: list[str]=Field(
-        default_factory=list,
-        sa_column=Column(JSONB)
-    )
     attendants:list["User"]=Relationship(
         back_populates="enrolled_courses",
         link_model=CourseEnrollment,
         sa_relationship_kwargs={"lazy":"selectin"},
     )
-    attendant_ids:list[str]=Field(
-        default_factory=list,
-        sa_column=Column(JSONB)
-        )
+
 
 
 class CoursePublic(CourseBase):
@@ -702,6 +698,24 @@ class CoursePublic(CourseBase):
     module_ids:list[str]=Field(default_factory=list)
     attendant_ids:list[str]=Field(default_factory=list)
 
+    @staticmethod
+    def from_db(course:Course) -> "CoursePublic":
+        """Create a CoursePublic instance from a Course database model.
+
+        Args:
+            course (Course): The Course database model instance.
+        Returns:
+            CoursePublic: The corresponding CoursePublic instance.
+        """
+        return CoursePublic(
+            id=course.id,
+            author_id=course.author_id,
+            title=course.title,
+            description=course.description,
+            module_ids=[module.id for module in course.modules],
+            attendant_ids=[user.id for user in course.attendants],
+        )
+
 
 class CoursesPublic(SQLModel):
     """Public representation for a list of Courses.
@@ -712,9 +726,6 @@ class CoursesPublic(SQLModel):
     """
     data: list[CoursePublic]
     count: int
-
-
-
 
 
 
@@ -739,7 +750,6 @@ class ModuleCreate(ModuleBase):
     attachments:list[str]|None = None
     quizzes:list[str]|None = None
     course_id:str
-    pass
 
 
 class ModuleUpdate(ModuleBase):
@@ -776,25 +786,16 @@ class Module(ModuleBase, table=True):
     """
     id: str = Field(default_factory=uuid7str, primary_key=True)
     released_at: datetime|None = None
-    course_id: str = Field(foreign_key="course.id")
     course: Course = Relationship(
         back_populates="modules", 
         link_model=CourseModuleLink,
         sa_relationship_kwargs={"lazy":"selectin"},
         )
     attachments: list["Attachment"] = Relationship(back_populates="module")
-    attachment_ids: list[str]=Field(
-        default_factory=list,
-        sa_column=Column(JSONB)
-    )
     quizzes: list["Quiz"] = Relationship(
         back_populates="module",
         sa_relationship_kwargs={"lazy":"selectin"},
         )
-    quiz_ids: list[str]=Field(
-        default_factory=list,
-        sa_column=Column(JSONB)
-    )
     progress: list["UserModuleProgress"] = Relationship(back_populates="module")
 
 
@@ -815,6 +816,36 @@ class ModulePublic(ModuleBase):
     course_id: str
     attachments: list[str] = Field(default_factory=list) #list of attachment ids
     quizzes:list[str]=Field(default_factory=list)
+
+    @staticmethod
+    async def from_db(db:AsyncSession, module:Module) -> "ModulePublic":
+        """Create a ModulePublic instance from a Module database model.
+
+        Args:
+            module (Module): The Module database model instance.
+        Returns:
+            ModulePublic: The corresponding ModulePublic instance.
+        """
+        statement = (
+        select(Module)
+        .where(Module.id == module.id)
+        .options(
+            selectinload(Module.course),         # ← This loads course
+            selectinload(Module.attachments),    # ← This loads attachments
+            selectinload(Module.quizzes),        # ← This loads quizzes
+        )
+    )
+        module = (await db.exec(statement)).first()
+        return ModulePublic(
+            id=module.id,
+            course_id=module.course.id,
+            title=module.title,
+            content=module.content,
+            order=module.order,
+            is_draft=module.is_draft,
+            attachments=[attachment.id for attachment in module.attachments],
+            quizzes=[quiz.id for quiz in module.quizzes],
+        )
 
 
 class ModulesPublic(SQLModel):
@@ -884,8 +915,8 @@ class Attachment(AttachmentBase, table=True):
     """
 
     id: str = Field(default_factory=uuid7str, primary_key=True)
-    module_id: str = Field(foreign_key="module.id")
-    module: Module = Relationship(back_populates="attachments")
+    module_id: str = Field(foreign_key="module.id", nullable=True, ondelete="CASCADE")
+    module: Module|None = Relationship(back_populates="attachments")
 
 
 class AttachmentPublic(AttachmentBase):
@@ -901,6 +932,24 @@ class AttachmentPublic(AttachmentBase):
     """
     id: str
     module_id: str
+
+    @staticmethod
+    def from_db(attachment:Attachment) -> "AttachmentPublic":
+        """Create an AttachmentPublic instance from an Attachment database model.
+
+        Args:
+            attachment (Attachment): The Attachment database model instance.
+        Returns:
+            AttachmentPublic: The corresponding AttachmentPublic instance.
+        """
+        return AttachmentPublic(
+            id=attachment.id,
+            module_id=attachment.module.id if attachment.module else "",
+            title=attachment.title,
+            file_url=attachment.file_url,
+            type=attachment.type,
+            order=attachment.order,
+        )
 
 class AttachmentsPublic(SQLModel):
     """List of AttachmentPublic objects.
@@ -926,11 +975,11 @@ class UserModuleProgress(SQLModel, table=True):
         user: Relationship to the user.
         module: Relationship to the module.
     """
-    id: str = Field(default=None, primary_key=True)
+    id: str = Field(default_factory=uuid7str, primary_key=True)
     user_id: str = Field(foreign_key="user.id")
     module_id: str = Field(foreign_key="module.id")
-    started_at: datetime = Field(default_factory=datetime.now(timezone.utc))
-    last_accessed: datetime = Field(default_factory=datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_accessed: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: datetime|None = None
     is_completed: bool = False
 

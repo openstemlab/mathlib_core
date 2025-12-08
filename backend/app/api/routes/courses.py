@@ -37,7 +37,7 @@ async def create_course_route(
         session.add(course)
         await session.flush()
         await session.refresh(course)
-        return CoursePublic.model_validate(course)
+        return CoursePublic.from_db(course)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -55,7 +55,7 @@ async def read_courses_route(
     statement = select(Course)
     courses = (await session.exec(statement.offset(skip).limit(limit))).all()
     count = len(courses)
-    courses_public = [CoursePublic.model_validate(course) for course in courses]
+    courses_public = [CoursePublic.from_db(course) for course in courses]
     return CoursesPublic(data=courses_public, count=count)
 
 
@@ -71,7 +71,7 @@ async def read_course_route(
     course = await session.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-    return CoursePublic.model_validate(course)
+    return CoursePublic.from_db(course)
 
 
 @router.put("/{course_id}", response_model=CoursePublic)
@@ -98,7 +98,7 @@ async def update_course(
         session.add(course)
         await session.flush()
         await session.refresh(course)
-        return CoursePublic.model_validate(course)
+        return CoursePublic.from_db(course)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
