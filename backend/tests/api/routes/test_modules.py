@@ -119,7 +119,13 @@ async def test_read_modules_pagination(
     db.add(course)
     await db.flush()
 
-    module = Module(title="Mechanics", content="Newton's laws", course=course, order=1)
+    module = Module(
+        title="Mechanics", 
+        content="Newton's laws", 
+        course=course, 
+        order=1,
+        author_id=user.id,
+        )
     db.add(module)
     await db.flush()
     await db.refresh(module)
@@ -155,7 +161,13 @@ async def test_read_module_by_id(
     # Arrange
     user = await create_random_user(db)
     course = Course(title="CS 101", author_id=user.id)
-    module = Module(title="Variables", content="int x = 5;", course=course, order=1)
+    module = Module(
+        title="Variables", 
+        content="int x = 5;", 
+        course=course, 
+        order=1,
+        author_id=user.id,
+        )
 
     db.add(module)
     await db.flush()
@@ -194,7 +206,13 @@ async def test_update_module_as_superuser(
     # Arrange: Superuser can edit any module
     author = await create_random_user(db)
     course = Course(title="Biology", author_id=author.id)
-    module = Module(title="Old Module", content="Old content", course=course, order=1)
+    module = Module(
+        title="Old Module", 
+        content="Old content", 
+        course=course, 
+        order=1,
+        author_id=author.id,
+        )
 
     db.add(module)
     await db.flush()
@@ -221,13 +239,54 @@ async def test_update_module_as_superuser(
     assert content["is_draft"] is True
 
 
+async def test_update_module_as_author(
+    client_with_test_db: AsyncClient, db: AsyncSession
+):
+    author = await create_random_user(db)
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=author.email, password="testpass"
+    )
+
+    course = Course(title="Geography", author_id=author.id)
+    module = Module(
+        title="Maps", 
+        content="Map reading", 
+        course=course, 
+        order=1,
+        author_id=author.id,
+        )
+    
+    db.add(module)
+    await db.flush()
+
+    update_data = {
+        "title": "Updated Maps",
+        "content": "Advanced map reading",
+    }
+
+    response = await client_with_test_db.put(
+        f"{settings.API_V1_STR}/modules/{module.id}",
+        json=update_data,
+        headers=headers,
+    )
+    assert response.status_code == 200
+    content = response.json() 
+    assert content["title"] == "Updated Maps"
+    assert content["content"] == "Advanced map reading"
+
 async def test_update_module_attachments_and_quizzes(
     client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
 ):
     # Arrange
     author = await create_random_user(db)
     course = Course(title="Chemistry", author_id=author.id)
-    module = Module(title="Reactions", content="...", course=course, order=1)
+    module = Module(
+        title="Reactions", 
+        content="...", 
+        course=course, 
+        order=1,
+        author_id=author.id,
+        )
 
     attachment1 = Attachment(file_url="a1.pdf", type="pdf", title="Attachment 1",)
     attachment2 = Attachment(file_url="a2.pdf", type="pdf", title="Attachment 2",)
@@ -267,7 +326,13 @@ async def test_update_module_forbidden_for_non_superuser(
     # Arrange: Regular user tries to update
     user = await create_random_user(db)
     course = Course(title="History", author_id=user.id)
-    module = Module(title="Ancient Rome", content="...", course=course, order=1)
+    module = Module(
+        title="Ancient Rome", 
+        content="...", 
+        course=course, 
+        order=1,
+        author_id=user.id,
+        )
 
     db.add(module)
     await db.flush()
@@ -305,7 +370,13 @@ async def test_delete_module_as_superuser(
     # Arrange
     author = await create_random_user(db)
     course = Course(title="Art", author_id=author.id)
-    module = Module(title="Color Theory", content="", course=course, order=1,)
+    module = Module(
+        title="Color Theory", 
+        content="", 
+        course=course, 
+        order=1,
+        author_id=author.id,
+        )
 
     db.add(module)
     await db.flush()
@@ -326,6 +397,31 @@ async def test_delete_module_as_superuser(
     assert module_in_db is None
 
 
+async def test_delete_module_as_author(
+    client_with_test_db: AsyncClient, db: AsyncSession
+):
+    author = await create_random_user(db)
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=author.email, password="testpass"
+    )
+    course = Course(title="Art", author_id=author.id)
+    module = Module(
+        title="Color Theory", 
+        content="", 
+        course=course, 
+        order=1,
+        author_id=author.id,
+        )
+    db.add(module)
+    await db.flush()
+    response = await client_with_test_db.delete(
+        f"{settings.API_V1_STR}/modules/{module.id}",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["message"] == "Module deleted successfully."
+
+
 async def test_delete_module_not_found(
     client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str]
 ):
@@ -344,7 +440,13 @@ async def test_delete_module_forbidden_for_non_superuser(
     # Arrange
     user = await create_random_user(db)
     course = Course(title="Music", author_id=user.id)
-    module = Module(title="Notes", course=course, order=1, content="Do re mi...")
+    module = Module(
+        title="Notes", 
+        course=course, 
+        order=1, 
+        content="Do re mi...",
+        author_id=user.id,
+        )
 
     db.add(module)
     await db.flush()

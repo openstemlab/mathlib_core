@@ -9,6 +9,7 @@ from sqlmodel import Field, Relationship, SQLModel, select
 from sqlalchemy import Column, String, CheckConstraint
 from sqlalchemy.orm import selectinload
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import UniqueConstraint
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
@@ -641,11 +642,13 @@ class CourseUpdate(CourseBase):
     Attributes:
         title: Title of the course, optional.
         description: Description of the course, optional.
-        attendants: list of ids of users enrolled in the course.
+        attendants: list of user ids enrolled in the course.
+        modules: list of module ids in the course.
     """
     title: str | None = None
     description: str | None = None
     attendants:list[str]|None = None
+    modules:list[str]|None = None
 
 
 class Course(CourseBase, table=True):
@@ -660,7 +663,7 @@ class Course(CourseBase, table=True):
         description: Optional description of the course.
         attendants: list of users enrolled in the course.
     """
-
+    __tablename__ = "course"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     author_id: str = Field(foreign_key="user.id")
     author: User = Relationship(
@@ -672,7 +675,9 @@ class Course(CourseBase, table=True):
     modules: list["Module"] = Relationship(
         back_populates="course",
         link_model=CourseModuleLink,
-        sa_relationship_kwargs={"lazy": "selectin"},
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "order_by": "Module.order",},
     )
     attendants:list["User"]=Relationship(
         back_populates="enrolled_courses",
@@ -784,8 +789,13 @@ class Module(ModuleBase, table=True):
         attachments: Relationship to the attachments in the module.
         progress: Relationship to the progress of the module for users.
     """
+    __table_args__ = (UniqueConstraint("course_id", "order",name="unique_module_order_per_course"),)
+    __tablename__ = "module"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     released_at: datetime|None = None
+    author_id: str = Field(foreign_key="user.id", nullable=False)
+    author: User = Relationship(sa_relationship_kwargs=({"lazy":"selectin","foreign_keys":"Module.author_id"}),)
+    course_id: str = Field(foreign_key="course.id", nullable=False, ondelete="CASCADE")
     course: Course = Relationship(
         back_populates="modules", 
         link_model=CourseModuleLink,
@@ -858,6 +868,15 @@ class ModulesPublic(SQLModel):
     data: list[ModulePublic]
     count: int
 
+
+class ModuleOrderItem(SQLModel):
+    module_id: str
+    order: int
+
+class ReorderModulesRequest(SQLModel):
+    modules: list[ModuleOrderItem]
+
+
 class AttachmentBase(SQLModel):
     """Base model for attachments.
     
@@ -913,7 +932,8 @@ class Attachment(AttachmentBase, table=True):
         type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
         order: Position of the attachment in the module.
     """
-
+    __table_args__ = (UniqueConstraint("module_id", "order", name="unique_attachment_order_per_module"),)
+    __tablename__ = "attachment"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     module_id: str = Field(foreign_key="module.id", nullable=True, ondelete="CASCADE")
     module: Module|None = Relationship(back_populates="attachments")
