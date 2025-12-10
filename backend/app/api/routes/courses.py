@@ -8,6 +8,7 @@ from app.models import (
     CoursePublic,
     CoursesPublic,
     CourseUpdate,
+    Module,
     User,
 )
 
@@ -23,23 +24,71 @@ async def create_course_route(
     course_in: CourseCreate,
 ):
     """
-    Create a new course.
-    Only authenticated users can create a course.
-    The current user becomes the author.
+    Create a course with modules.
+    - Validates ALL modules first
+    - Fails fast if any module is invalid
+    - Returns detailed error list
     """
-    try:
-        
-        course = Course(
-            title=course_in.title,
-            description=course_in.description,
-            author_id=current_user.id,
+    errors = []
+
+    # 1. Validate modules first — DO NOT CREATE ANYTHING YET
+
+    used_orders = set()
+    for idx, mod_data in enumerate(course_in.modules):
+
+        if mod_data.order < 1:
+            errors.append({
+                "index": idx,
+                "field": "order",
+                "error": "Order must be >= 1"
+            })
+
+
+        if mod_data.order in used_orders:
+            errors.append({
+                "index": idx,
+                "field": "order",
+                "error": f"Duplicate order {mod_data.order}"
+            })
+        else:
+            used_orders.add(mod_data.order)
+
+    # If any errors → fail before touching DB
+    if errors:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Course creation failed due to invalid module data.",
+                "errors": errors,
+            },
         )
-        session.add(course)
-        await session.flush()
-        await session.refresh(course)
-        return CoursePublic.from_db(course)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+
+    # 2. Now we know all modules are valid — proceed
+    course = Course(
+        title=course_in.title,
+        description=course_in.description,
+        author_id=current_user.id,
+    )
+    session.add(course)
+    await session.flush()  # Get course.id
+
+    # 3. Create all modules (now safe)
+
+    for mod_data in course_in.modules:
+        module = Module(
+            title=mod_data.title.strip(),
+            content=mod_data.content.strip(),
+            order=mod_data.order,
+            is_draft=mod_data.is_draft or False,
+            author_id=current_user.id,
+            course_id=course.id,
+        )
+        session.add(module)
+
+    await session.flush()
+
+    await session.refresh(course)
+    return CoursePublic.from_db(course)
 
 
 @router.get("/", response_model=CoursesPublic)

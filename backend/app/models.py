@@ -2,6 +2,7 @@
 from uuid_extensions import uuid7str
 from enum import Enum
 from datetime import datetime, timezone
+from typing import Any
 
 
 from pydantic import EmailStr
@@ -20,14 +21,6 @@ class CourseEnrollment(SQLModel, table=True):
     __tablename__ = "courseenrollment"
     course_id: str = Field(foreign_key="course.id", primary_key=True)
     user_id: str = Field(foreign_key="user.id", primary_key=True)
-
-
-# Join table: Course <-> Module (module order in course)
-class CourseModuleLink(SQLModel, table=True):
-    __tablename__ = "coursemodules"
-    course_id: str = Field(foreign_key="course.id", primary_key=True)
-    module_id: str = Field(foreign_key="module.id", primary_key=True)
-
 
 # Shared properties
 class UserBase(SQLModel):
@@ -633,7 +626,7 @@ class CourseCreate(CourseBase):
         description: Optional description of the course.
         title: Title of the course.
     """
-    pass
+    modules:list["ModuleCreate"] = Field(default_factory=list)
 
 
 class CourseUpdate(CourseBase):
@@ -674,7 +667,6 @@ class Course(CourseBase, table=True):
     )
     modules: list["Module"] = Relationship(
         back_populates="course",
-        link_model=CourseModuleLink,
         sa_relationship_kwargs={
             "lazy": "selectin",
             "order_by": "Module.order",},
@@ -754,7 +746,7 @@ class ModuleCreate(ModuleBase):
     """Model for creating a new module."""
     attachments:list[str]|None = None
     quizzes:list[str]|None = None
-    course_id:str
+    course_id:str|None = None
 
 
 class ModuleUpdate(ModuleBase):
@@ -798,7 +790,6 @@ class Module(ModuleBase, table=True):
     course_id: str = Field(foreign_key="course.id", nullable=False, ondelete="CASCADE")
     course: Course = Relationship(
         back_populates="modules", 
-        link_model=CourseModuleLink,
         sa_relationship_kwargs={"lazy":"selectin"},
         )
     attachments: list["Attachment"] = Relationship(back_populates="module")
@@ -1005,4 +996,24 @@ class UserModuleProgress(SQLModel, table=True):
 
     user: User = Relationship(back_populates="modules")
     module: Module = Relationship(back_populates="progress")
+
+
+# class ValidationErrorItem(SQLModel):
+#     index: int | None = None
+#     module_data: dict[str, Any] | None = None
+#     error: str
+
+
+# class CourseCreationResponse(CoursePublic):
+#     warning: str | None = None
+#     failed_modules: list[ValidationErrorItem] = []
+
+#     @staticmethod
+#     def from_db(course: Course) -> "CourseCreationResponse":
+#         course_public = CoursePublic.from_db(course)
+#         return CourseCreationResponse(
+#             **course_public.model_dump(),
+#             warning=None,
+#             failed_modules=[],
+#         )
 

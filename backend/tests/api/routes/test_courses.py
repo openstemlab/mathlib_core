@@ -27,6 +27,61 @@ async def test_create_course(client_with_test_db: AsyncClient, db: AsyncSession)
     assert content["author_id"] == str(user.id)
 
 
+async def test_create_course_missing_fields(
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]
+):
+    data = {"description": "No title provided"}
+
+    response = await client_with_test_db.post(
+        f"{settings.API_V1_STR}/courses/",
+        json=data,
+        headers=normal_user_token_headers,
+    )
+    assert response.status_code == 422  # Unprocessable Entity due to validation error
+
+
+async def test_create_course_with_modules(
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]):
+    data = {
+        "title": "Physics 101",
+        "description": "Intro to Physics",
+        "modules": [
+            {"title": "Module 1", "content": "Content 1", "order": 1},
+            {"title": "Module 2", "content": "Content 2", "order": 2},
+        ],
+    }
+    response = await client_with_test_db.post(
+        f"{settings.API_V1_STR}/courses/",
+        json=data,
+        headers=normal_user_token_headers,
+    )
+    assert response.status_code == 201
+
+
+async def test_create_course_invalid_module_data(
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]
+):
+    data = {
+        "title": "Biology 101",
+        "description": "Intro to Biology",
+        "modules": [
+            {"title": "", "content": "Content 1", "order": 1},  
+            {"title": "Module 2", "content": "", "order": 2},   
+            {"title": "Module 3", "content": "Content 3", "order": 2},  # Invalid: duplicate order
+            {"title": "Module 4", "content": "Content 4", "order": 0},  # Invalid: order < 1
+        ],
+    }
+
+    response = await client_with_test_db.post(
+        f"{settings.API_V1_STR}/courses/",
+        json=data,
+        headers=normal_user_token_headers,
+    )
+    assert response.status_code == 400
+    content = response.json()
+    assert content["detail"]["message"] == "Course creation failed due to invalid module data."
+    assert len(content["detail"]["errors"]) == 2
+
 async def test_create_course_unauthenticated(client_with_test_db: AsyncClient):
     data = {"title": "Chemistry 101", "description": "Intro to Chemistry"}
 
