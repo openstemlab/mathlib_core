@@ -124,7 +124,7 @@ async def read_course_route(
 
 
 @router.put("/{course_id}", response_model=CoursePublic)
-async def update_course(
+async def update_course_route(
     *,
     session: SessionDep,
     current_user:CurrentUser,

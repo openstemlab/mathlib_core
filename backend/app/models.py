@@ -640,8 +640,7 @@ class CourseUpdate(CourseBase):
     """
     title: str | None = None
     description: str | None = None
-    attendants:list[str]|None = None
-    modules:list[str]|None = None
+
 
 
 class Course(CourseBase, table=True):
