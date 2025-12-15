@@ -892,7 +892,7 @@ class AttachmentCreate(AttachmentBase):
         type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
         order: Position of the attachment in the module.
     """
-    module_id: str
+    module_id: str|None = None
 
 class AttachmentUpdate(AttachmentBase):
     """Model for updating an existing Attachment.
@@ -941,7 +941,7 @@ class AttachmentPublic(AttachmentBase):
         order: Position of the attachment in the module.
     """
     id: str
-    module_id: str
+    module_id: str|None
 
     @staticmethod
     def from_db(attachment:Attachment) -> "AttachmentPublic":
@@ -954,7 +954,7 @@ class AttachmentPublic(AttachmentBase):
         """
         return AttachmentPublic(
             id=attachment.id,
-            module_id=attachment.module.id if attachment.module else "",
+            module_id=attachment.module_id,
             title=attachment.title,
             file_url=attachment.file_url,
             type=attachment.type,
@@ -995,6 +995,10 @@ class UserModuleProgress(SQLModel, table=True):
 
     user: User = Relationship(back_populates="modules")
     module: Module = Relationship(back_populates="progress")
+
+
+class ReorderAttachments(SQLModel):
+    order_list: list[str]
 
 
 # class ValidationErrorItem(SQLModel):

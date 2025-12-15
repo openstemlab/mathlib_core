@@ -288,8 +288,8 @@ async def test_update_module_attachments_and_quizzes(
         author_id=author.id,
         )
 
-    attachment1 = Attachment(file_url="a1.pdf", type="pdf", title="Attachment 1",)
-    attachment2 = Attachment(file_url="a2.pdf", type="pdf", title="Attachment 2",)
+    attachment1 = Attachment(file_url="a1.pdf", type="pdf", title="Attachment 1", order=1,)
+    attachment2 = Attachment(file_url="a2.pdf", type="pdf", title="Attachment 2", order=2,)
     quiz1 = Quiz(title="Periodic Table", owner_id=author.id)
 
     db.add_all([attachment1, attachment2, quiz1])

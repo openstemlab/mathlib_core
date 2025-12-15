@@ -8,8 +8,8 @@ from app.api.deps import get_db
 from app.core.config import settings
 from app.core.db import async_engine, init_db
 from app.main import app
-from app.models import Item, User
-from tests.utils.user import authentication_token_from_email
+from app.models import Item, User, Course, Module
+from tests.utils.user import authentication_token_from_email, create_random_user
 from tests.utils.utils import get_superuser_token_headers
 
 
@@ -58,3 +58,50 @@ async def client_with_test_db(
     app.dependency_overrides[get_db] = _override_get_session
     yield client
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def create_user(db: AsyncSession) -> User:
+    """
+    Fixture to create a random user in the database.
+    """
+    user = await create_random_user(db)
+    await db.flush()
+    await db.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture(scope="function")
+async def create_course(db: AsyncSession, create_user: User) -> Course:
+    """
+    Fixture to create a test course with a valid author.
+    """
+    course = Course(
+        title="Test Course",
+        description="Test Description",
+        author_id=create_user.id,
+    )
+    db.add(course)
+    await db.flush()
+    await db.refresh(course)
+    return course
+
+
+@pytest_asyncio.fixture(scope="function")
+async def create_module(db: AsyncSession, create_course: Course) -> Module:
+    """
+    Fixture to create a test module within a course.
+    """
+    module = Module(
+        title="Test Module",
+        content="Test Content",
+        order=1,
+        is_draft=False,
+        course_id=create_course.id,
+        author_id=create_course.author_id,
+        released_at=None,
+    )
+    db.add(module)
+    await db.flush()
+    await db.refresh(module)
+    return module

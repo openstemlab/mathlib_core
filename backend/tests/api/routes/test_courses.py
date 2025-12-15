@@ -103,12 +103,14 @@ async def test_read_courses_pagination(
     await db.flush()
     await db.refresh(course)
 
-    response = await client_with_test_db.get(f"{settings.API_V1_STR}/courses/", headers=normal_user_token_headers)
+    response = await client_with_test_db.get(
+        f"{settings.API_V1_STR}/courses/", 
+        headers=normal_user_token_headers,)
     assert response.status_code == 200
     content = response.json()
     assert content["count"] >= 1
     assert len(content["data"]) >= 1
-    assert any(c["id"] == str(course.id) for c in content["data"])
+    assert course.id in [c["id"] for c in content["data"]]
 
 
 async def test_read_course_by_id(

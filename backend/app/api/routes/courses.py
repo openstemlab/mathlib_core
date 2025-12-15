@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from sqlmodel import select
+from sqlmodel import select, func
 
 from app.api.deps import CurrentUser, SessionDep
 from app.models import (
@@ -101,11 +101,12 @@ async def read_courses_route(
     """
     Retrieve courses with pagination.
     """
-    statement = select(Course)
+    statement = select(Course).order_by(Course.id)
     courses = (await session.exec(statement.offset(skip).limit(limit))).all()
-    count = len(courses)
+    count_statement = select(func.count()).select_from(Course)
+    total_count = (await session.exec(count_statement)).one()
     courses_public = [CoursePublic.from_db(course) for course in courses]
-    return CoursesPublic(data=courses_public, count=count)
+    return CoursesPublic(data=courses_public, count=total_count)
 
 
 @router.get("/{course_id}", response_model=CoursePublic)

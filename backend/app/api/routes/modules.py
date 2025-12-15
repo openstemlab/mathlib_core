@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from sqlmodel import select
+from sqlmodel import select, func
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, SessionDep
@@ -27,20 +27,19 @@ async def read_modules_route(
     skip:int = 0, 
     limit: int=10):
 
-    statement = select(Module).offset(skip).limit(limit)
+    statement = select(Module).order_by(Module.id).offset(skip).limit(limit)
     modules = (await session.exec(statement)).all()
 
     if not modules:
         return {"data":[], "count": 0}
     
-    data = []
-    for module in modules:
-        module_public = await ModulePublic.from_db(session, module)
-        data.append(module_public)
-    count = len(modules)
+    data = [await ModulePublic.from_db(db=session, module=module) for module in modules]
+    
+    count_statement = select(func.count()).select_from(Module)
+    total_count = (await session.exec(count_statement)).one()
     return ModulesPublic(
         data=data[skip:skip+limit],
-        count=count,
+        count=total_count,
     )
 
 
@@ -64,6 +63,8 @@ async def create_module_route(session:SessionDep, current_user: CurrentUser, mod
         raise HTTPException(status_code=404, detail="Course not found.")
 
     attachments = await _get_objects_by_id(Attachment, module_in.attachments, session)
+    for index, attachment in enumerate(attachments):
+        attachment.order = index + 1
 
     quizzes = await _get_objects_by_id(Quiz, module_in.quizzes, session)
 
@@ -110,7 +111,10 @@ async def update_module_route(
 
     # 2. Update attachments if provided
     if "attachments" in module_in.model_fields_set:  # explicitly passed in request
-        module.attachments = await _get_objects_by_id(Attachment, module_in.attachments, session)
+        attachments = await _get_objects_by_id(Attachment, module_in.attachments, session)
+        for index, attachment in enumerate(attachments):
+            attachment.order = index + 1
+        module.attachments = attachments
 
     # 3. Update quizzes if provided
     if "quizzes" in module_in.model_fields_set:  # explicitly passed
