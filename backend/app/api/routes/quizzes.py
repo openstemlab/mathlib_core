@@ -1,6 +1,7 @@
 """
 Quizzes only accessable by the owner
 """
+
 from typing import Any
 
 from fastapi import APIRouter, HTTPException

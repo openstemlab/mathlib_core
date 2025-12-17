@@ -10,7 +10,7 @@ from app.models import (
     AttachmentsPublic,
     Message,
     Module,
-    ReorderAttachments
+    ReorderAttachments,
 )
 from app.utils import _get_objects_by_id
 
@@ -38,9 +38,7 @@ async def read_attachments_route(
     if not attachments:
         return {"data": [], "count": 0}
 
-    data = [
-        AttachmentPublic.from_db(att) for att in attachments
-    ]
+    data = [(await AttachmentPublic.from_db(session, att)) for att in attachments]
 
     return AttachmentsPublic(data=data, count=total_count)
 
@@ -58,7 +56,7 @@ async def read_attachment_route(
     if not attachment:
         raise HTTPException(status_code=404, detail="Attachment not found.")
 
-    return AttachmentPublic.from_db(attachment)
+    return await AttachmentPublic.from_db(session, attachment)
 
 
 @router.post("/", response_model=AttachmentPublic)
@@ -76,11 +74,10 @@ async def create_attachment_route(
         module = await session.get(Module, attachment_in.module_id)
         if not module:
             raise HTTPException(status_code=404, detail="Module not found.")
-        
+
         # Auto-calculate order
-        last_order_statement = (
-            select(func.max(Attachment.order))
-            .where(Attachment.module_id == attachment_in.module_id)
+        last_order_statement = select(func.max(Attachment.order)).where(
+            Attachment.module_id == attachment_in.module_id
         )
         result = await session.exec(last_order_statement)
         next_order = (result.one() or 0) + 1
@@ -99,7 +96,7 @@ async def create_attachment_route(
     await session.flush()
     await session.refresh(attachment)
 
-    return AttachmentPublic.from_db(attachment)
+    return await AttachmentPublic.from_db(session, attachment)
 
 
 @router.put("/{attachment_id}", response_model=AttachmentPublic)
@@ -124,7 +121,9 @@ async def update_attachment_route(
         if not module:
             raise HTTPException(status_code=404, detail="Module not found.")
         result = await session.exec(
-            select(func.max(Attachment.order)).where(Attachment.module_id == attachment_in.module_id)
+            select(func.max(Attachment.order)).where(
+                Attachment.module_id == attachment_in.module_id
+            )
         )
         new_order = (result.one() or 0) + 1
 
@@ -133,7 +132,9 @@ async def update_attachment_route(
         attachment.order = new_order
 
     # Update other fields
-    attachment_data = attachment_in.model_dump(exclude_unset=True, exclude={"module_id"})
+    attachment_data = attachment_in.model_dump(
+        exclude_unset=True, exclude={"module_id"}
+    )
     for key, value in attachment_data.items():
         setattr(attachment, key, value)
 
@@ -141,7 +142,7 @@ async def update_attachment_route(
     await session.flush()
     await session.refresh(attachment)
 
-    return AttachmentPublic.from_db(attachment)
+    return await AttachmentPublic.from_db(session, attachment)
 
 
 @router.delete("/{attachment_id}", response_model=Message)

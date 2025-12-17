@@ -145,8 +145,7 @@ async def _get_objects_by_id(model_type, id_list, session):
     missing = set(id_list) - found_ids
     if missing:
         raise HTTPException(
-            status_code=404,
-            detail=f"{model_type.__name__} not found: {missing}"
+            status_code=404, detail=f"{model_type.__name__} not found: {missing}"
         )
 
     return db_objects

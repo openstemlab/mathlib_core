@@ -35,21 +35,19 @@ async def create_course_route(
 
     used_orders = set()
     for idx, mod_data in enumerate(course_in.modules):
-
         if mod_data.order < 1:
-            errors.append({
-                "index": idx,
-                "field": "order",
-                "error": "Order must be >= 1"
-            })
-
+            errors.append(
+                {"index": idx, "field": "order", "error": "Order must be >= 1"}
+            )
 
         if mod_data.order in used_orders:
-            errors.append({
-                "index": idx,
-                "field": "order",
-                "error": f"Duplicate order {mod_data.order}"
-            })
+            errors.append(
+                {
+                    "index": idx,
+                    "field": "order",
+                    "error": f"Duplicate order {mod_data.order}",
+                }
+            )
         else:
             used_orders.add(mod_data.order)
 
@@ -88,7 +86,7 @@ async def create_course_route(
     await session.flush()
 
     await session.refresh(course)
-    return CoursePublic.from_db(course)
+    return await CoursePublic.from_db(session, course)
 
 
 @router.get("/", response_model=CoursesPublic)
@@ -105,7 +103,9 @@ async def read_courses_route(
     courses = (await session.exec(statement.offset(skip).limit(limit))).all()
     count_statement = select(func.count()).select_from(Course)
     total_count = (await session.exec(count_statement)).one()
-    courses_public = [CoursePublic.from_db(course) for course in courses]
+    courses_public = [
+        (await CoursePublic.from_db(session, course)) for course in courses
+    ]
     return CoursesPublic(data=courses_public, count=total_count)
 
 
@@ -121,14 +121,14 @@ async def read_course_route(
     course = await session.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-    return CoursePublic.from_db(course)
+    return await CoursePublic.from_db(session, course)
 
 
 @router.put("/{course_id}", response_model=CoursePublic)
 async def update_course_route(
     *,
     session: SessionDep,
-    current_user:CurrentUser,
+    current_user: CurrentUser,
     course_id: str,
     course_in: CourseUpdate,
 ):
@@ -148,7 +148,7 @@ async def update_course_route(
         session.add(course)
         await session.flush()
         await session.refresh(course)
-        return CoursePublic.from_db(course)
+        return await CoursePublic.from_db(session, course)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -157,7 +157,7 @@ async def update_course_route(
 async def delete_course_route(
     *,
     session: SessionDep,
-    current_user:CurrentUser,
+    current_user: CurrentUser,
     course_id: str,
 ):
     """
@@ -173,6 +173,7 @@ async def delete_course_route(
     await session.delete(course)
     await session.flush()
     return {"message": "Course deleted successfully"}
+
 
 @router.post("/{course_id}/enroll", response_model=dict)
 async def enroll_in_course_route(
@@ -193,10 +194,11 @@ async def enroll_in_course_route(
         raise HTTPException(status_code=404, detail="User not found")
 
     if course in user.enrolled_courses:
-        raise HTTPException(status_code=400, detail="User already enrolled in this course")
+        raise HTTPException(
+            status_code=400, detail="User already enrolled in this course"
+        )
 
     user.enrolled_courses.append(course)
-    
 
     session.add(user)
     session.add(course)
@@ -206,3 +208,36 @@ async def enroll_in_course_route(
 
     return {"message": "User enrolled in course successfully"}
 
+
+@router.post("/{course_id}/unenroll", response_model=dict)
+async def unenroll_from_course_route(
+    *,
+    session: SessionDep,
+    current_user: CurrentUser,
+    course_id: str,
+):
+    """
+    Unenroll the current user from a course.
+    """
+    course = await session.get(Course, course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    user = await session.get(User, current_user.id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if course not in user.enrolled_courses:
+        raise HTTPException(
+            status_code=400, detail="User is not enrolled in this course"
+        )
+
+    user.enrolled_courses.remove(course)
+
+    session.add(user)
+    session.add(course)
+    await session.flush()
+    await session.refresh(user)
+    await session.refresh(course)
+
+    return {"message": "User unenrolled from course successfully"}

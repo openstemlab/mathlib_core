@@ -1,12 +1,12 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
-    items, 
-    login, 
-    private, 
-    users, 
-    utils, 
-    exercises, 
+    items,
+    login,
+    private,
+    users,
+    utils,
+    exercises,
     quizzes,
     modules,
     courses,

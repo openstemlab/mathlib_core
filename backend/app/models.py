@@ -1,4 +1,3 @@
-
 from uuid_extensions import uuid7str
 from enum import Enum
 from datetime import datetime, timezone
@@ -14,13 +13,12 @@ from sqlalchemy import UniqueConstraint
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
-
-
 # Join table: Course <-> User (enrollments)
 class CourseEnrollment(SQLModel, table=True):
     __tablename__ = "courseenrollment"
     course_id: str = Field(foreign_key="course.id", primary_key=True)
     user_id: str = Field(foreign_key="user.id", primary_key=True)
+
 
 # Shared properties
 class UserBase(SQLModel):
@@ -134,10 +132,10 @@ class User(UserBase, table=True):
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
-    enrolled_courses:list["Course"]=Relationship(
+    enrolled_courses: list["Course"] = Relationship(
         back_populates="attendants",
         link_model=CourseEnrollment,
-        sa_relationship_kwargs={"lazy":"selectin"},
+        sa_relationship_kwargs={"lazy": "selectin"},
     )
 
 
@@ -526,8 +524,8 @@ class Quiz(QuizBase, table=True):
         back_populates="quiz",
         sa_relationship_kwargs={"lazy": "selectin", "overlaps": "exercises,quizzes"},
     )
-    module_id: str|None = Field(default=None, foreign_key="module.id")
-    module: "Module" =Relationship(back_populates="quizzes")
+    module_id: str | None = Field(default=None, foreign_key="module.id")
+    module: "Module" = Relationship(back_populates="quizzes")
 
 
 class QuizExerciseData(SQLModel):
@@ -610,42 +608,43 @@ class StartQuizRequest(SQLModel):
 
 class CourseBase(SQLModel):
     """Base model for courses.
-    
+
     Attributes:
         title: Title of the course.
         description: Optional description of the course.
     """
+
     title: str
-    description: str|None = None
+    description: str | None = None
 
 
 class CourseCreate(CourseBase):
     """Model for creating a new course.
-    
+
     Attributes:
         description: Optional description of the course.
         title: Title of the course.
+        modules: list of ModuleCreate objects representing modules in the course. Can be empty.
     """
-    modules:list["ModuleCreate"] = Field(default_factory=list)
+
+    modules: list["ModuleCreate"] = Field(default_factory=list)
 
 
 class CourseUpdate(CourseBase):
     """Model for updating an existing course.
-    
+
     Attributes:
         title: Title of the course, optional.
         description: Description of the course, optional.
-        attendants: list of user ids enrolled in the course.
-        modules: list of module ids in the course.
     """
+
     title: str | None = None
     description: str | None = None
 
 
-
 class Course(CourseBase, table=True):
     """Database model for a Course. Inherits from CourseBase.
-    
+
     Attributes:
         id: Unique identifier for the course.
         author_id: Unique identifier for the user who created the course.
@@ -655,27 +654,27 @@ class Course(CourseBase, table=True):
         description: Optional description of the course.
         attendants: list of users enrolled in the course.
     """
+
     __tablename__ = "course"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     author_id: str = Field(foreign_key="user.id")
     author: User = Relationship(
-        sa_relationship_kwargs=({
-            "lazy": "selectin",
-            "foreign_keys": "Course.author_id"
-            }),
+        sa_relationship_kwargs=(
+            {"lazy": "selectin", "foreign_keys": "Course.author_id"}
+        ),
     )
     modules: list["Module"] = Relationship(
         back_populates="course",
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "order_by": "Module.order",},
+            "order_by": "Module.order",
+        },
     )
-    attendants:list["User"]=Relationship(
+    attendants: list["User"] = Relationship(
         back_populates="enrolled_courses",
         link_model=CourseEnrollment,
-        sa_relationship_kwargs={"lazy":"selectin"},
+        sa_relationship_kwargs={"lazy": "selectin"},
     )
-
 
 
 class CoursePublic(CourseBase):
@@ -689,20 +688,25 @@ class CoursePublic(CourseBase):
         module_ids: list of Module ids representing modules in the course
         attendant_ids: list of User ids representing users enrolled in the course
     """
+
     id: str
     author_id: str
-    module_ids:list[str]=Field(default_factory=list)
-    attendant_ids:list[str]=Field(default_factory=list)
+    module_ids: list[str] = Field(default_factory=list)
+    attendant_ids: list[str] = Field(default_factory=list)
 
     @staticmethod
-    def from_db(course:Course) -> "CoursePublic":
-        """Create a CoursePublic instance from a Course database model.
-
-        Args:
-            course (Course): The Course database model instance.
-        Returns:
-            CoursePublic: The corresponding CoursePublic instance.
-        """
+    async def from_db(db: AsyncSession, course: Course) -> "CoursePublic":
+        """Create a CoursePublic instance from a Course database model."""
+        statement = (
+            select(Course)
+            .where(Course.id == course.id)
+            .options(
+                selectinload(Course.modules),
+                selectinload(Course.attendants),
+            )
+        )
+        result = await db.exec(statement)
+        course = result.one()
         return CoursePublic(
             id=course.id,
             author_id=course.author_id,
@@ -720,21 +724,21 @@ class CoursesPublic(SQLModel):
         data: List of CoursePublic objects.
         count: Total number of courses.
     """
+
     data: list[CoursePublic]
     count: int
 
 
-
-
 class ModuleBase(SQLModel):
     """Base model for modules.
-    
+
     Attributes:
         title: Title of the module.
         content: Content of the module.
         order: Position of the module in the course.
-        is_draft: Flag indicating if the module is a draft.
+        is_draft: Flag indicating if the module is a draft. True by default.
     """
+
     title: str
     content: str
     order: int
@@ -742,32 +746,46 @@ class ModuleBase(SQLModel):
 
 
 class ModuleCreate(ModuleBase):
-    """Model for creating a new module."""
-    attachments:list[str]|None = None
-    quizzes:list[str]|None = None
-    course_id:str|None = None
+    """Model for creating a new module.
+
+    Attributes:
+        title: Title of the module.
+        content: Content of the module.
+        order: Position of the module in the course.
+        is_draft: Flag indicating if the module is a draft. True by default.
+        attachments: list of Attachment ids representing attachments in the module. Optional.
+        quizzes: list of Quiz ids representing quizzes in the module. Optional.
+        course_id: Unique identifier for the course. Optional.
+    """
+
+    attachments: list[str] | None = None
+    quizzes: list[str] | None = None
+    course_id: str | None = None
 
 
 class ModuleUpdate(ModuleBase):
     """Model for updating an existing module.
-    
+
     Attributes:
         title: Optional, title of the module.
         content: Optional, content of the module.
         order: Optional, position of the module in the course.
         is_draft: Optional, flag indicating if the module is a draft.
+        attachments: Optional, list of Attachment ids representing attachments in the module.
+        quizzes: Optional, list of Quiz ids representing quizzes in the module.
     """
-    title:str|None = None
-    content:str|None = None
-    order:int|None = None
-    is_draft:bool|None = None
-    attachments:list[str]|None = None
-    quizzes:list[str]|None = None
+
+    title: str | None = None
+    content: str | None = None
+    order: int | None = None
+    is_draft: bool | None = None
+    attachments: list[str] | None = None
+    quizzes: list[str] | None = None
 
 
 class Module(ModuleBase, table=True):
     """Database model for a Module. Inherits from ModuleBase.
-    
+
     Attributes:
         id: Unique identifier for the module.
         course_id: Unique identifier for the course.
@@ -780,22 +798,29 @@ class Module(ModuleBase, table=True):
         attachments: Relationship to the attachments in the module.
         progress: Relationship to the progress of the module for users.
     """
-    __table_args__ = (UniqueConstraint("course_id", "order",name="unique_module_order_per_course"),)
+
+    __table_args__ = (
+        UniqueConstraint("course_id", "order", name="unique_module_order_per_course"),
+    )
     __tablename__ = "module"
     id: str = Field(default_factory=uuid7str, primary_key=True)
-    released_at: datetime|None = None
+    released_at: datetime | None = None
     author_id: str = Field(foreign_key="user.id", nullable=False)
-    author: User = Relationship(sa_relationship_kwargs=({"lazy":"selectin","foreign_keys":"Module.author_id"}),)
+    author: User = Relationship(
+        sa_relationship_kwargs=(
+            {"lazy": "selectin", "foreign_keys": "Module.author_id"}
+        ),
+    )
     course_id: str = Field(foreign_key="course.id", nullable=False, ondelete="CASCADE")
     course: Course = Relationship(
-        back_populates="modules", 
-        sa_relationship_kwargs={"lazy":"selectin"},
-        )
+        back_populates="modules",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
     attachments: list["Attachment"] = Relationship(back_populates="module")
     quizzes: list["Quiz"] = Relationship(
         back_populates="module",
-        sa_relationship_kwargs={"lazy":"selectin"},
-        )
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
     progress: list["UserModuleProgress"] = Relationship(back_populates="module")
 
 
@@ -812,29 +837,24 @@ class ModulePublic(ModuleBase):
         is_draft: Flag indicating if the module is a draft.
         quizzes: List of Quiz ids representing quizzes in the module.
     """
+
     id: str
     course_id: str
-    attachments: list[str] = Field(default_factory=list) #list of attachment ids
-    quizzes:list[str]=Field(default_factory=list)
+    attachments: list[str] = Field(default_factory=list)  # list of attachment ids
+    quizzes: list[str] = Field(default_factory=list)
 
     @staticmethod
-    async def from_db(db:AsyncSession, module:Module) -> "ModulePublic":
-        """Create a ModulePublic instance from a Module database model.
-
-        Args:
-            module (Module): The Module database model instance.
-        Returns:
-            ModulePublic: The corresponding ModulePublic instance.
-        """
+    async def from_db(db: AsyncSession, module: Module) -> "ModulePublic":
+        """Create a ModulePublic instance from a Module database model."""
         statement = (
-        select(Module)
-        .where(Module.id == module.id)
-        .options(
-            selectinload(Module.course),         # ← This loads course
-            selectinload(Module.attachments),    # ← This loads attachments
-            selectinload(Module.quizzes),        # ← This loads quizzes
+            select(Module)
+            .where(Module.id == module.id)
+            .options(
+                selectinload(Module.course),  # ← This loads course
+                selectinload(Module.attachments),  # ← This loads attachments
+                selectinload(Module.quizzes),  # ← This loads quizzes
+            )
         )
-    )
         module = (await db.exec(statement)).first()
         return ModulePublic(
             id=module.id,
@@ -855,27 +875,43 @@ class ModulesPublic(SQLModel):
         data: List of ModulePublic objects.
         count: Total number of modules.
     """
+
     data: list[ModulePublic]
     count: int
 
 
 class ModuleOrderItem(SQLModel):
+    """Model representing a module and its position.
+
+    Attributes:
+        module_id: Unique identifier for the module.
+        order: Position of the module.
+    """
+
     module_id: str
     order: int
 
+
 class ReorderModulesRequest(SQLModel):
+    """Request model for reordering modules in a course.
+
+    Attributes:
+        modules: List of ModuleOrderItem objects representing modules and their new positions.
+    """
+
     modules: list[ModuleOrderItem]
 
 
 class AttachmentBase(SQLModel):
     """Base model for attachments.
-    
+
     Attributes:
         title: Title of the attachment.
         file_url: URL to the attachment file.
         type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
         order: Position of the attachment in the module.
     """
+
     title: str
     file_url: str
     type: str
@@ -884,19 +920,22 @@ class AttachmentBase(SQLModel):
 
 class AttachmentCreate(AttachmentBase):
     """Model for creating new Attachment.
-    
+
     Attributes:
         file_url: URL to the attachment file.
         module_id: Unique identifier for the module.
         title: Title of the attachment.
         type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
         order: Position of the attachment in the module.
+        module_id: Optional, unique identifier for the module.
     """
-    module_id: str|None = None
+
+    module_id: str | None = None
+
 
 class AttachmentUpdate(AttachmentBase):
     """Model for updating an existing Attachment.
-    
+
     Attributes:
         title: Optional, title of the attachment.
         file_url: Optional, URL to the attachment file.
@@ -904,15 +943,17 @@ class AttachmentUpdate(AttachmentBase):
         order: Optional, position of the attachment in the module.
         module_id: Optional, unique identifier for the module.
     """
+
     title: str | None = None
     file_url: str | None = None
     type: str | None = None
     order: int | None = None
     module_id: str | None = None
 
+
 class Attachment(AttachmentBase, table=True):
     """Database model for an Attachment. Inherits from AttachmentBase.
-    
+
     Attributes:
         id: Unique identifier for the attachment.
         module_id: Unique identifier for the module.
@@ -922,16 +963,21 @@ class Attachment(AttachmentBase, table=True):
         type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
         order: Position of the attachment in the module.
     """
-    __table_args__ = (UniqueConstraint("module_id", "order", name="unique_attachment_order_per_module"),)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "module_id", "order", name="unique_attachment_order_per_module"
+        ),
+    )
     __tablename__ = "attachment"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     module_id: str = Field(foreign_key="module.id", nullable=True, ondelete="CASCADE")
-    module: Module|None = Relationship(back_populates="attachments")
+    module: Module | None = Relationship(back_populates="attachments")
 
 
 class AttachmentPublic(AttachmentBase):
     """Public representation of an Attachment. Inherits from AttachmentBase.
-    
+
     Attributes:
         id: Unique identifier for the attachment.
         module_id: Unique identifier for the module.
@@ -940,18 +986,20 @@ class AttachmentPublic(AttachmentBase):
         type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
         order: Position of the attachment in the module.
     """
+
     id: str
-    module_id: str|None
+    module_id: str | None
 
     @staticmethod
-    def from_db(attachment:Attachment) -> "AttachmentPublic":
-        """Create an AttachmentPublic instance from an Attachment database model.
-
-        Args:
-            attachment (Attachment): The Attachment database model instance.
-        Returns:
-            AttachmentPublic: The corresponding AttachmentPublic instance.
-        """
+    async def from_db(db: AsyncSession, attachment: Attachment) -> "AttachmentPublic":
+        """Create an AttachmentPublic instance from an Attachment database model."""
+        statement = (
+            select(Attachment)
+            .where(Attachment.id == attachment.id)
+            .options(selectinload(Attachment.module))
+        )
+        result = await db.exec(statement)
+        attachment = result.one()
         return AttachmentPublic(
             id=attachment.id,
             module_id=attachment.module_id,
@@ -961,19 +1009,22 @@ class AttachmentPublic(AttachmentBase):
             order=attachment.order,
         )
 
+
 class AttachmentsPublic(SQLModel):
     """List of AttachmentPublic objects.
-    
+
     Attributes:
         data: List of AttachmentPublic objects.
         count: Total number of attachments.
     """
+
     data: list[AttachmentPublic]
     count: int
 
+
 class UserModuleProgress(SQLModel, table=True):
     """Link model for keeping users progress of modules.
-    
+
     Attributes:
         id: Unique identifier for the progress record.
         user_id: Unique identifier for the user.
@@ -985,12 +1036,13 @@ class UserModuleProgress(SQLModel, table=True):
         user: Relationship to the user.
         module: Relationship to the module.
     """
+
     id: str = Field(default_factory=uuid7str, primary_key=True)
     user_id: str = Field(foreign_key="user.id")
     module_id: str = Field(foreign_key="module.id")
     started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_accessed: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    completed_at: datetime|None = None
+    completed_at: datetime | None = None
     is_completed: bool = False
 
     user: User = Relationship(back_populates="modules")
@@ -998,25 +1050,10 @@ class UserModuleProgress(SQLModel, table=True):
 
 
 class ReorderAttachments(SQLModel):
+    """Request model for reordering attachments in a module.
+
+    Attributes:
+        order_list: List of attachment IDs in the desired order.
+    """
+
     order_list: list[str]
-
-
-# class ValidationErrorItem(SQLModel):
-#     index: int | None = None
-#     module_data: dict[str, Any] | None = None
-#     error: str
-
-
-# class CourseCreationResponse(CoursePublic):
-#     warning: str | None = None
-#     failed_modules: list[ValidationErrorItem] = []
-
-#     @staticmethod
-#     def from_db(course: Course) -> "CourseCreationResponse":
-#         course_public = CoursePublic.from_db(course)
-#         return CourseCreationResponse(
-#             **course_public.model_dump(),
-#             warning=None,
-#             failed_modules=[],
-#         )
-

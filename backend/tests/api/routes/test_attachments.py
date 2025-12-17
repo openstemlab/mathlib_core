@@ -42,8 +42,8 @@ async def test_create_attachment_standalone(
 
 
 async def test_create_attachment_with_module(
-    client_with_test_db: AsyncClient, 
-    db: AsyncSession, 
+    client_with_test_db: AsyncClient,
+    db: AsyncSession,
     normal_user_token_headers: dict[str, str],
     create_module: Module,
 ):
@@ -72,8 +72,8 @@ async def test_create_attachment_with_module(
 
 
 async def test_create_attachment_with_module_multiple(
-    client_with_test_db: AsyncClient, 
-    db: AsyncSession, 
+    client_with_test_db: AsyncClient,
+    db: AsyncSession,
     normal_user_token_headers: dict[str, str],
     create_module: Module,
 ):
@@ -123,8 +123,8 @@ async def test_create_attachment_module_not_found(
 
 
 async def test_read_attachments_pagination(
-    client_with_test_db: AsyncClient, 
-    normal_user_token_headers: dict[str, str], 
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
     db: AsyncSession,
     create_module: Module,
 ):
@@ -166,7 +166,7 @@ async def test_read_attachments_pagination(
 
 
 async def test_read_attachments_empty_list(
-    client_with_test_db: AsyncClient, 
+    client_with_test_db: AsyncClient,
     normal_user_token_headers: dict[str, str],
     db: AsyncSession,
 ):
@@ -185,7 +185,9 @@ async def test_read_attachments_empty_list(
 
 
 async def test_read_attachment_by_id(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ):
     """
     Test reading a single attachment.
@@ -229,7 +231,9 @@ async def test_read_attachment_not_found(
 
 
 async def test_update_attachment_change_title(
-    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient,
+    superuser_token_headers: dict[str, str],
+    db: AsyncSession,
 ):
     """
     Superuser updates attachment title (no module_id change).
@@ -258,8 +262,8 @@ async def test_update_attachment_change_title(
 
 
 async def test_update_attachment_change_module(
-    client_with_test_db: AsyncClient, 
-    superuser_token_headers: dict[str, str], 
+    client_with_test_db: AsyncClient,
+    superuser_token_headers: dict[str, str],
     db: AsyncSession,
     create_module: Module,
 ):
@@ -282,12 +286,12 @@ async def test_update_attachment_change_module(
     await db.flush()
 
     module2 = Module(
-        title="Mechanics", 
-        content="Newton's laws", 
-        course=course, 
+        title="Mechanics",
+        content="Newton's laws",
+        course=course,
         order=1,
         author_id=user.id,
-        )
+    )
     db.add(module2)
     await db.flush()
     await db.refresh(module2)
@@ -308,7 +312,9 @@ async def test_update_attachment_change_module(
 
 
 async def test_update_attachment_module_not_found(
-    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient,
+    superuser_token_headers: dict[str, str],
+    db: AsyncSession,
 ):
     """
     Try to assign to non-existent module.
@@ -351,7 +357,9 @@ async def test_update_attachment_not_found(
 
 
 async def test_delete_attachment_as_superuser(
-    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient,
+    superuser_token_headers: dict[str, str],
+    db: AsyncSession,
 ):
     """
     Superuser deletes attachment.
@@ -379,7 +387,9 @@ async def test_delete_attachment_as_superuser(
 
 
 async def test_delete_attachment_forbidden_for_non_superuser(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ):
     """
     Regular user tries to delete attachment → forbidden.
@@ -417,8 +427,8 @@ async def test_delete_attachment_not_found(
 
 
 async def test_reorder_attachments_in_module(
-    client_with_test_db: AsyncClient, 
-    superuser_token_headers: dict[str, str], 
+    client_with_test_db: AsyncClient,
+    superuser_token_headers: dict[str, str],
     db: AsyncSession,
     create_module: Module,
 ):
@@ -427,9 +437,15 @@ async def test_reorder_attachments_in_module(
     """
 
     # Create 3 attachments
-    att1 = Attachment(title="A1", file_url="1.pdf", type="pdf", module_id=create_module.id, order=1)
-    att2 = Attachment(title="A2", file_url="2.pdf", type="pdf", module_id=create_module.id, order=2)
-    att3 = Attachment(title="A3", file_url="3.pdf", type="pdf", module_id=create_module.id, order=3)
+    att1 = Attachment(
+        title="A1", file_url="1.pdf", type="pdf", module_id=create_module.id, order=1
+    )
+    att2 = Attachment(
+        title="A2", file_url="2.pdf", type="pdf", module_id=create_module.id, order=2
+    )
+    att3 = Attachment(
+        title="A3", file_url="3.pdf", type="pdf", module_id=create_module.id, order=3
+    )
     db.add_all([att1, att2, att3])
     await db.flush()
     await db.refresh(att1)
@@ -450,7 +466,9 @@ async def test_reorder_attachments_in_module(
 
     # Verify order in DB
     result = await db.exec(
-        select(Attachment).where(Attachment.module_id == create_module.id).order_by(Attachment.order)
+        select(Attachment)
+        .where(Attachment.module_id == create_module.id)
+        .order_by(Attachment.order)
     )
     ordered = result.all()
     assert ordered[0].id == att3.id
@@ -477,8 +495,8 @@ async def test_reorder_attachments_module_not_found(
 
 
 async def test_reorder_attachments_some_not_found(
-    client_with_test_db: AsyncClient, 
-    superuser_token_headers: dict[str, str], 
+    client_with_test_db: AsyncClient,
+    superuser_token_headers: dict[str, str],
     db: AsyncSession,
     create_module: Module,
 ):

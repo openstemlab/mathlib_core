@@ -10,9 +10,12 @@ from tests.utils.user import create_random_user, user_authentication_headers
 
 pytestmark = pytest.mark.asyncio()
 
+
 async def test_create_course(client_with_test_db: AsyncClient, db: AsyncSession):
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
     data = {"title": "Math 101", "description": "Intro to Mathematics"}
 
     response = await client_with_test_db.post(
@@ -41,7 +44,8 @@ async def test_create_course_missing_fields(
 
 
 async def test_create_course_with_modules(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]):
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]
+):
     data = {
         "title": "Physics 101",
         "description": "Intro to Physics",
@@ -65,10 +69,18 @@ async def test_create_course_invalid_module_data(
         "title": "Biology 101",
         "description": "Intro to Biology",
         "modules": [
-            {"title": "", "content": "Content 1", "order": 1},  
-            {"title": "Module 2", "content": "", "order": 2},   
-            {"title": "Module 3", "content": "Content 3", "order": 2},  # Invalid: duplicate order
-            {"title": "Module 4", "content": "Content 4", "order": 0},  # Invalid: order < 1
+            {"title": "", "content": "Content 1", "order": 1},
+            {"title": "Module 2", "content": "", "order": 2},
+            {
+                "title": "Module 3",
+                "content": "Content 3",
+                "order": 2,
+            },  # Invalid: duplicate order
+            {
+                "title": "Module 4",
+                "content": "Content 4",
+                "order": 0,
+            },  # Invalid: order < 1
         ],
     }
 
@@ -79,8 +91,12 @@ async def test_create_course_invalid_module_data(
     )
     assert response.status_code == 400
     content = response.json()
-    assert content["detail"]["message"] == "Course creation failed due to invalid module data."
+    assert (
+        content["detail"]["message"]
+        == "Course creation failed due to invalid module data."
+    )
     assert len(content["detail"]["errors"]) == 2
+
 
 async def test_create_course_unauthenticated(client_with_test_db: AsyncClient):
     data = {"title": "Chemistry 101", "description": "Intro to Chemistry"}
@@ -92,9 +108,10 @@ async def test_create_course_unauthenticated(client_with_test_db: AsyncClient):
     assert response.status_code == 401
 
 
-
 async def test_read_courses_pagination(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ):
     # Create a course first
     user = await create_random_user(db)
@@ -104,8 +121,9 @@ async def test_read_courses_pagination(
     await db.refresh(course)
 
     response = await client_with_test_db.get(
-        f"{settings.API_V1_STR}/courses/", 
-        headers=normal_user_token_headers,)
+        f"{settings.API_V1_STR}/courses/",
+        headers=normal_user_token_headers,
+    )
     assert response.status_code == 200
     content = response.json()
     assert content["count"] >= 1
@@ -114,7 +132,9 @@ async def test_read_courses_pagination(
 
 
 async def test_read_course_by_id(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ):
     user = await create_random_user(db)
     course = Course(title="Advanced Math", author_id=user.id)
@@ -131,7 +151,9 @@ async def test_read_course_by_id(
     assert content["title"] == "Advanced Math"
 
 
-async def test_read_course_not_found(client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]):
+async def test_read_course_not_found(
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]
+):
     fake_id = uuid7str()
     response = await client_with_test_db.get(
         f"{settings.API_V1_STR}/courses/{fake_id}", headers=normal_user_token_headers
@@ -141,10 +163,14 @@ async def test_read_course_not_found(client_with_test_db: AsyncClient, normal_us
 
 
 async def test_update_course_as_author(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ):
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
 
     course = Course(title="Old Title", description="Old Desc", author_id=user.id)
     db.add(course)
@@ -169,9 +195,8 @@ async def test_update_course_as_non_author(
     normal_user_token_headers: dict[str, str],
     db: AsyncSession,
 ):
-
     user = await create_random_user(db)
-    course = Course(title="My Course", author_id=user.id) 
+    course = Course(title="My Course", author_id=user.id)
     db.add(course)
     await db.flush()
     await db.refresh(course)
@@ -188,9 +213,13 @@ async def test_update_course_as_non_author(
 
 
 async def test_delete_course_as_author(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ):
-    user_response = await client_with_test_db.get(f"{settings.API_V1_STR}/users/me", headers=normal_user_token_headers)
+    user_response = await client_with_test_db.get(
+        f"{settings.API_V1_STR}/users/me", headers=normal_user_token_headers
+    )
     user_id = user_response.json()["id"]
 
     course = Course(title="To Delete", author_id=user_id)
@@ -208,7 +237,9 @@ async def test_delete_course_as_author(
     assert course_in_db is None
 
 
-async def test_delete_course_not_found(client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]):
+async def test_delete_course_not_found(
+    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]
+):
     fake_id = uuid7str()
     response = await client_with_test_db.delete(
         f"{settings.API_V1_STR}/courses/{fake_id}", headers=normal_user_token_headers
@@ -228,15 +259,16 @@ async def test_delete_course_not_author(
     await db.flush()
 
     response = await client_with_test_db.delete(
-        f"{settings.API_V1_STR}/courses/{course.id}", 
-        headers=normal_user_token_headers
+        f"{settings.API_V1_STR}/courses/{course.id}", headers=normal_user_token_headers
     )
     assert response.status_code == 403
     assert response.json()["detail"] == "Not enough permissions"
 
 
 async def test_enroll_in_course(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ):
     # Create course
     author = await create_random_user(db)
@@ -247,10 +279,13 @@ async def test_enroll_in_course(
 
     # Get current user
     user = await create_random_user(db)
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
     # Enroll
     response = await client_with_test_db.post(
-        f"{settings.API_V1_STR}/courses/{course.id}/enroll", headers=headers,
+        f"{settings.API_V1_STR}/courses/{course.id}/enroll",
+        headers=headers,
     )
     assert response.status_code == 200
     assert response.json()["message"] == "User enrolled in course successfully"
@@ -264,7 +299,9 @@ async def test_enroll_in_course(
 
 
 async def test_enroll_already_enrolled(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: AsyncSession
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
 ):
     # Create course
     author = await create_random_user(db)
@@ -277,12 +314,14 @@ async def test_enroll_already_enrolled(
     await db.flush()
     await db.refresh(course)
 
-    headers = await user_authentication_headers(client=client_with_test_db, email=user.email, password="testpass")
-  
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
 
     # Try to re-enroll
     response = await client_with_test_db.post(
-        f"{settings.API_V1_STR}/courses/{course.id}/enroll", headers=headers,
+        f"{settings.API_V1_STR}/courses/{course.id}/enroll",
+        headers=headers,
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "User already enrolled in this course"
@@ -293,7 +332,8 @@ async def test_enroll_course_not_found(
 ):
     fake_id = uuid7str()
     response = await client_with_test_db.post(
-        f"{settings.API_V1_STR}/courses/{fake_id}/enroll", headers=normal_user_token_headers
+        f"{settings.API_V1_STR}/courses/{fake_id}/enroll",
+        headers=normal_user_token_headers,
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "Course not found"
