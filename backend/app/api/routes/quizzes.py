@@ -1,6 +1,7 @@
 """
 Quizzes only accessable by the owner
 """
+
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -161,7 +162,7 @@ async def delete_quiz_route(
 
     if current_user.id == quiz.owner_id:
         await session.delete(quiz)
-        await session.commit()
+        await session.flush()
         return Message(message="Quiz deleted successfully")
 
     else:

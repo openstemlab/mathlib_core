@@ -565,7 +565,6 @@ async def test_start_quiz_invalid_length(
     assert response.status_code == 422
 
 
-
 async def test_save_quiz_route(
     client_with_test_db: AsyncClient, db: AsyncSession
 ) -> None:
