@@ -146,6 +146,10 @@ async def get_quiz_by_id(
         status=quiz.status,
         exercises=exercises_data,
         title=quiz.title,
+        final_score=quiz.final_score,
+        feedback=quiz.feedback,
+        graded_at=quiz.graded_at,
+        graded_by_id=quiz.graded_by_id
     )
     return response
 
@@ -429,6 +433,7 @@ async def save_quiz_progress(
 
             # Update correctness
             quiz_exercise.is_correct = correct
+            quiz_exercise.given_answer = user_answer
             session.add(quiz_exercise)
         else:
             logger.warning("Exercise ID %s not found in quiz %s", exercise_id, quiz.id)
@@ -471,6 +476,10 @@ async def load_active_quiz(session: AsyncSession, owner_id: str) -> QuizPublic |
         status=quiz.status,
         exercises=exercises_data,
         title=quiz.title,
+        final_score=quiz.final_score,
+        feedback=quiz.feedback,
+        graded_at=quiz.graded_at,
+        graded_by_id=quiz.graded_by_id
     )
     return response
 
@@ -506,10 +515,36 @@ async def submit_quiz(session: AsyncSession, quiz: Quiz, answers: SubmitAnswer):
             correct = user_answer.strip() == solution_map[exercise_id].strip()
 
             quiz_exercise.is_correct = correct
+            quiz_exercise.given_answer = user_answer
             session.add(quiz_exercise)
         else:
             logger.warning("Exercise ID %s not found in quiz %s", exercise_id, quiz.id)
     quiz.status = QuizStatusChoices.SUBMITTED.value
+    quiz.final_score = await calculate_quiz_score(quiz=quiz, session=session)
+    quiz.submitted_at = func.now()
     session.add(quiz)
     await session.flush()
     await session.refresh(quiz)
+
+
+async def calculate_quiz_score(quiz: Quiz, session: AsyncSession) -> float:
+    """Calculate the score of a submitted quiz as a percentage.
+
+    :param quiz: The Quiz object for which the score is to be calculated.
+    :param session: The database session.
+    :returns: float - The calculated score as a percentage (0.0 to 100.0).
+    """
+    statement = (
+        select(QuizExercise)
+        .where(QuizExercise.quiz_id == quiz.id)
+    )
+    quiz_exercises = (await session.exec(statement)).all()
+
+    total_questions = len(quiz_exercises)
+    if total_questions == 0:
+        return 0.0
+
+    correct_answers = sum(1 for qe in quiz_exercises if qe.is_correct)
+
+    score_percentage = (correct_answers / total_questions) * 100.0
+    return score_percentage

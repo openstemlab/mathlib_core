@@ -3,8 +3,10 @@ Quizzes only accessable by the owner
 """
 
 from typing import Any
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, SessionDep
 from app.core.quiz import (
@@ -24,9 +26,13 @@ from app.models import (
     QuizUpdate,
     QuizPublic,
     QuizzesPublic,
+    QuizExercise,
     QuizStatusChoices,
     StartQuizRequest,
     SubmitAnswer,
+    QuizForGrading,
+    QuizExerciseForGrading,
+    ManualGradeRequest,
     Message,
     User,
 )
@@ -252,3 +258,109 @@ async def submit_quiz_route(
         return Message(message="Quiz submitted successfully")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
+
+
+@router.get("/{id}/grade", response_model=QuizForGrading)
+async def view_quiz_for_grading_route(
+    session: SessionDep,
+    current_user: CurrentUser,
+    id: str,
+):
+    """
+    Teacher-only endpoint to view a quiz for manual grading.
+    Returns exercises with student answers and current correctness.
+    """
+    if not current_user.is_teacher:
+        raise HTTPException(status_code=403, detail="Only teachers can grade quizzes.")
+
+    quiz = await session.get(
+        Quiz,
+        id,
+        options=[
+            selectinload(Quiz.quiz_exercises).selectinload(QuizExercise.exercise),
+            selectinload(Quiz.owner),
+        ],
+    )
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    # Fetch owner name
+    owner_name = quiz.owner.full_name if quiz.owner else None
+
+    # Fetch grader name if exists
+    graded_by_name = None
+    if quiz.graded_by_id and quiz.graded_by:
+        graded_by_name = quiz.graded_by.full_name
+
+    exercises_data = []
+    for qe in quiz.quiz_exercises:
+        exercises_data.append(
+            QuizExerciseForGrading.from_db(qe)
+            )
+
+    return QuizForGrading(
+        id=quiz.id,
+        owner_id=quiz.owner_id,
+        owner_name=owner_name,
+        title=quiz.title,
+        status=quiz.status,
+        submitted_at=quiz.submitted_at,  
+        exercises=exercises_data,
+        final_score=quiz.final_score,
+        feedback=quiz.feedback,
+        graded_at=quiz.graded_at,
+        graded_by_id=quiz.graded_by_id,
+        graded_by_name=graded_by_name,
+    )
+
+
+@router.put("/{id}/grade", response_model=Message)
+async def manual_grade_quiz(
+    session: SessionDep,
+    current_user: CurrentUser,
+    id: str,
+    request: ManualGradeRequest,
+):
+    if not current_user.is_teacher:
+        raise HTTPException(status_code=403, detail="Only teachers can grade quizzes.")
+
+    quiz = await session.get(
+        Quiz,
+        id,
+        options=[selectinload(Quiz.quiz_exercises).selectinload(QuizExercise.exercise)],
+    )
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    # Build map for fast lookup
+    qe_map = {qe.exercise_id: qe for qe in quiz.quiz_exercises}
+
+    for correction in request.corrections:
+        ex_id = correction.exercise_id
+        if ex_id not in qe_map:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Exercise ID '{ex_id}' not in this quiz."
+            )
+        qe_map[ex_id].is_correct = correction.is_correct
+        session.add(qe_map[ex_id])
+
+    # Recalculate score
+    correct = sum(1 for qe in quiz.quiz_exercises if qe.is_correct is True)
+    total = len(quiz.quiz_exercises)
+    quiz.final_score = (correct / total * 100) if total > 0 else 0.0
+
+    # Update grading metadata
+    quiz.graded_at = datetime.now(timezone.utc)
+    quiz.graded_by_id = current_user.id
+    quiz.feedback = request.feedback
+
+    # Update status if provided
+    if request.status is not None:
+        quiz.status = request.status  
+
+    session.add(quiz)
+    await session.flush()
+
+    return Message(message="Quiz manually graded successfully")

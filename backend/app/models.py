@@ -137,6 +137,7 @@ class User(UserBase, table=True):
         link_model=CourseEnrollment,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+    is_teacher: bool = False
 
 
 # Properties to return via API, id is always required
@@ -310,6 +311,7 @@ class QuizExercise(SQLModel, table=True):
     exercise: "Exercise" = Relationship(back_populates="quiz_exercises")
     position: int = 0
     is_correct: bool | None = None
+    given_answer: str | None = None
 
 
 class ExerciseBase(SQLModel):
@@ -527,6 +529,14 @@ class Quiz(QuizBase, table=True):
     module_id: str | None = Field(default=None, foreign_key="module.id")
     module: "Module" = Relationship(back_populates="quizzes")
 
+    final_score: float | None = None  # percentage: 0.0 - 100.0
+    feedback: str | None = None
+    submitted_at: datetime | None = None
+    graded_at: datetime | None = None
+    graded_by_id: str | None = Field(default=None, foreign_key="user.id", ondelete="SET NULL")
+    graded_by: User | None = Relationship(sa_relationship_kwargs={"lazy": "selectin", "foreign_keys": "Quiz.graded_by_id"})
+
+
 
 class QuizExerciseData(SQLModel):
     """Model representing an exercise within a quiz along with its position.
@@ -564,10 +574,13 @@ class QuizPublic(QuizBase):
 
     id: str
     owner_id: str
-    exercises: list[
-        QuizExerciseDataPublic
-    ]  # list of {"exercise": ExercisePublic, "position": int}
+    exercises: list[QuizExerciseDataPublic] = Field(default_factory=list)
     status: str
+    submitted_at: datetime | None = None
+    final_score: float | None = None
+    feedback: str | None = None
+    graded_at: datetime | None = None
+    graded_by_id: str | None = None
 
 
 class QuizzesPublic(SQLModel):
@@ -604,6 +617,57 @@ class StartQuizRequest(SQLModel):
     tags: list[str] | None = Field(default_factory=list)
     length: int = Field(default=5, le=500)
     title: str | None = Field(default=None, max_length=255)
+
+
+class QuizExerciseForGrading(SQLModel):
+    """
+    Model for teacher-facing quiz review. Includes student's answer and correctness.
+    Not exposed to regular quiz responses.
+    """
+    exercise: ExercisePublic
+    position: int
+    solution: str | None = None
+    given_answer: str | None = None
+    is_correct: bool | None = None  # can be None if not yet graded
+
+    async def from_db(db: AsyncSession, quiz_exercise: QuizExercise) -> "QuizExerciseForGrading":
+
+        statement = select(Exercise).where(Exercise.id == quiz_exercise.exercise_id)
+        result = (await db.exec(statement)).one()
+        exercise = ExercisePublic.model_validate(result)
+        return QuizExerciseForGrading(
+            exercise=exercise,
+            position=quiz_exercise.position,
+            solution=result.solution,
+            given_answer=quiz_exercise.given_answer,
+            is_correct=quiz_exercise.is_correct
+        )
+
+class QuizForGrading(SQLModel):
+    id: str
+    owner_id: str
+    owner_name: str | None = None  # e.g., full_name
+    title: str | None = None
+    status: str
+    submitted_at: datetime | None = None  # could be set on submit
+    exercises: list[QuizExerciseForGrading]
+    final_score: float | None = None
+    feedback: str | None = None
+    graded_at: datetime | None = None
+    graded_by_id: str | None = None
+    graded_by_name: str | None = None
+
+
+
+class AnswerCorrection(SQLModel):
+    exercise_id: str
+    is_correct: bool
+
+
+class ManualGradeRequest(SQLModel):
+    corrections: list[AnswerCorrection]
+    feedback: str | None = None
+    status: QuizStatusChoices = QuizStatusChoices.GRADED.value
 
 
 class CourseBase(SQLModel):
