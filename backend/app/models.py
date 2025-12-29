@@ -496,6 +496,14 @@ class Quiz(QuizBase, table=True):
         exercises: list of Exercise objects representing exercises included in the quiz
         status: status of the quiz - new/active/submitted/graded.
         quiz_exercises: list of QuizExercise objects for quick access to positions and scores.
+        module_id: Optional unique identifier for the module the quiz belongs to.
+        module: Module object representing the module the quiz belongs to.
+        final_score: Optional final score of the quiz.
+        feedback: Optional feedback for the quiz.
+        submitted_at: Optional timestamp when the quiz was submitted.
+        graded_at: Optional timestamp when the quiz was graded.
+        graded_by_id: Optional unique identifier for the user who graded the quiz.
+        graded_by: Optional User object representing the grader of the quiz.
     """
 
     __tablename__ = "quiz"
@@ -578,6 +586,11 @@ class QuizPublic(QuizBase):
         owner_id: Unique identifier for the user who created the quiz.
         exercises: list of Exercise objects representing exercises included in the quiz
         status: status of the quiz - new/active/submitted/graded.
+        submitted_at: Optional timestamp when the quiz was submitted.
+        final_score: Optional final score of the quiz.
+        feedback: Optional feedback for the quiz.
+        graded_at: Optional timestamp when the quiz was graded.
+        graded_by_id: Optional unique identifier for the user who graded the quiz.
     """
 
     id: str
@@ -652,6 +665,22 @@ class QuizExerciseForGrading(SQLModel):
         )
 
 class QuizForGrading(SQLModel):
+    """Model for teacher-facing quiz review. Includes detailed exercise data for grading. Should not be exposed to students.
+
+    Attributes:
+        id: Unique identifier for the quiz.
+        owner_id: Unique identifier for the user who created the quiz.
+        owner_name: Optional full name of the quiz owner.
+        title: Optional title of the quiz.
+        status: Status of the quiz.
+        submitted_at: Timestamp when the quiz was submitted.
+        exercises: List of QuizExerciseForGrading objects representing exercises in the quiz.
+        final_score: Optional final score of the quiz.
+        feedback: Optional feedback for the quiz.
+        graded_at: Optional timestamp when the quiz was graded.
+        graded_by_id: Optional unique identifier for the user who graded the quiz.
+        graded_by_name: Optional full name of the user who graded the quiz.
+        """
     id: str
     owner_id: str
     owner_name: str | None = None  # e.g., full_name
@@ -668,11 +697,24 @@ class QuizForGrading(SQLModel):
 
 
 class AnswerCorrection(SQLModel):
+    """Model for saving corrections to individual answers in a quiz.
+
+    Attributes:
+        exercise_id: Unique identifier for the exercise.
+        is_correct: Boolean indicating if the answer is correct.
+        """
     exercise_id: str
     is_correct: bool
 
 
 class ManualGradeRequest(SQLModel):
+    """Model for submitting manual grades for a quiz.
+    Attributes:
+        corrections: list of AnswerCorrection objects representing corrections to individual answers.
+        feedback: Optional feedback for the quiz.
+        status: Status of the quiz after grading.
+        """
+
     corrections: list[AnswerCorrection]
     feedback: str | None = None
     status: QuizStatusChoices = QuizStatusChoices.GRADED.value

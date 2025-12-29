@@ -14,6 +14,8 @@ async def get_student_grades(
     session: SessionDep, 
     current_user: CurrentUser
     )->StudentGrades:
+    """Retrieve grades for a specific student by their ID."""
+    
     statement = select(Quiz).where(Quiz.owner_id == student_id, Quiz.submitted_at.is_not(None)).options(selectinload(Quiz.owner)).order_by(Quiz.submitted_at.desc())
     quizzes = (await session.exec(statement)).all()
 

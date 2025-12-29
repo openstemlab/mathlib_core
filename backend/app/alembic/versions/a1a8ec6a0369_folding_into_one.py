@@ -1,8 +1,8 @@
-"""fix
+"""folding_into_one
 
-Revision ID: beda2048ad39
+Revision ID: a1a8ec6a0369
 Revises: 
-Create Date: 2025-12-29 20:00:03.263525
+Create Date: 2025-12-29 21:18:47.874985
 
 """
 from alembic import op
@@ -11,7 +11,7 @@ import sqlmodel.sql.sqltypes
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = 'beda2048ad39'
+revision = 'a1a8ec6a0369'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -127,6 +127,13 @@ def upgrade():
     sa.ForeignKeyConstraint(['quiz_id'], ['quiz.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('quiz_id', 'exercise_id')
     )
+    op.create_index(
+    'idx_active_quiz_per_user',
+    'quiz',
+    ['owner_id'],
+    unique=True,
+    postgresql_where=sa.sql.text("status = 'active'")
+    )
     # ### end Alembic commands ###
 
 
@@ -143,4 +150,5 @@ def downgrade():
     op.drop_index(op.f('ix_user_email'), table_name='user')
     op.drop_table('user')
     op.drop_table('exercise')
+    op.drop_index('idx_active_quiz_per_user', table_name='quiz')
     # ### end Alembic commands ###
