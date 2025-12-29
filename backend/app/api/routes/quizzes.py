@@ -335,20 +335,31 @@ async def manual_grade_quiz_route(
 
     # Build map for fast lookup
     qe_map = {qe.exercise_id: qe for qe in quiz.quiz_exercises}
+    submitted_exercise_ids = {corr.exercise_id for corr in request.corrections}
 
-    for correction in request.corrections:
-        ex_id = correction.exercise_id
-        if ex_id not in qe_map:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Exercise ID '{ex_id}' not in this quiz."
-            )
-        qe_map[ex_id].is_correct = correction.is_correct
-        session.add(qe_map[ex_id])
+    # Validate: all quiz exercises must be corrected
+    quiz_exercise_ids = set(qe_map.keys())
+    if submitted_exercise_ids != quiz_exercise_ids:
+        missing = quiz_exercise_ids - submitted_exercise_ids
+        extra = submitted_exercise_ids - quiz_exercise_ids
+        msg_parts = []
+        if missing:
+            msg_parts.append(f"missing corrections for exercise IDs: {list(missing)}")
+        if extra:
+            msg_parts.append(f"extra corrections for invalid exercise IDs: {list(extra)}")
+        raise HTTPException(
+            status_code=400,
+            detail="; ".join(msg_parts)
+        )
 
-    # Recalculate score
-    correct = sum(1 for qe in quiz.quiz_exercises if qe.is_correct is True)
+    correct = 0
     total = len(quiz.quiz_exercises)
+    for correction in request.corrections:
+        qe = qe_map[correction.exercise_id]
+        qe.is_correct = correction.is_correct
+        session.add(qe)
+        if correction.is_correct:
+            correct += 1
     quiz.final_score = (correct / total * 100) if total > 0 else 0.0
 
     # Update grading metadata

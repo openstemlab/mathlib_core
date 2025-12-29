@@ -125,7 +125,9 @@ class User(UserBase, table=True):
     quizzes: list["Quiz"] = Relationship(
         back_populates="owner",
         cascade_delete=True,
-        sa_relationship_kwargs={"lazy": "selectin"},
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "Quiz.owner_id",},
     )
     modules: list["UserModuleProgress"] = Relationship(
         back_populates="user",
@@ -499,7 +501,13 @@ class Quiz(QuizBase, table=True):
     __tablename__ = "quiz"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
-    owner: User | None = Relationship(back_populates="quizzes")
+    owner: User | None = Relationship(
+        back_populates="quizzes",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "Quiz.owner_id",  # ← Add this
+        },
+        )
     exercises: list["Exercise"] = Relationship(
         back_populates="quizzes",
         link_model=QuizExercise,

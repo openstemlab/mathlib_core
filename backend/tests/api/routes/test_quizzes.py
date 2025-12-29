@@ -5,6 +5,7 @@ Tests for testing tests.
 import pytest
 from unittest.mock import ANY, Mock, AsyncMock, patch
 from uuid_extensions import uuid7str
+from datetime import datetime, timezone
 
 from httpx import AsyncClient
 from sqlmodel import select
@@ -1069,3 +1070,299 @@ async def test_submit_quiz_internal_error(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Database connection failed"
+
+
+
+async def test_view_quiz_for_grading_teacher_access(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
+    """
+    Test teacher accessing a quiz for grading.
+    """
+    # Create a student user
+    student = await create_random_user(db)
+    
+    # Create a teacher user
+    teacher = await create_random_user(db)
+    teacher.is_teacher = True
+    db.add(teacher)
+    teacher_headers = await user_authentication_headers(
+        client=client_with_test_db, email=teacher.email, password="testpass"
+    )
+
+    # Create a quiz for the student
+    quiz = await create_random_quiz(db)
+    await db.exec(
+        update(Quiz)
+        .where(Quiz.id == quiz.id)
+        .values(status=QuizStatusChoices.SUBMITTED.value, 
+                submitted_at=datetime.now(timezone.utc),
+                owner_id=student.id)
+    )
+    db.add(quiz)
+    await db.flush()
+    await db.refresh(quiz)
+
+    response = await client_with_test_db.get(
+        f"{settings.API_V1_STR}/users/{student.id}/quizzes/{quiz.id}/grade",
+        headers=teacher_headers,
+    )
+
+    assert response.status_code == 200
+    content = response.json()
+    assert content["id"] == str(quiz.id)
+    assert content["owner_id"] == str(student.id)
+    assert content["status"] == QuizStatusChoices.SUBMITTED.value
+    assert content["submitted_at"] is not None
+    assert "exercises" in content
+    assert content["final_score"] is None
+    assert content["feedback"] is None
+    assert content["graded_at"] is None
+    assert content["graded_by_id"] is None
+    assert content["graded_by_name"] is None
+
+
+async def test_view_quiz_for_grading_not_teacher(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
+    """
+    Test that non-teachers cannot access quiz grading endpoint.
+    """
+    user = await create_random_user(db)  # regular user, not teacher
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
+
+    quiz = await create_random_quiz(db)
+    await db.exec(
+        update(Quiz)
+        .where(Quiz.id == quiz.id)
+        .values(status=QuizStatusChoices.SUBMITTED.value)
+    )
+    await db.flush()
+
+    response = await client_with_test_db.get(
+        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}/grade",
+        headers=headers,
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only teachers can grade quizzes."
+
+
+async def test_view_quiz_for_grading_quiz_not_found(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
+    """
+    Test accessing non-existent quiz for grading.
+    """
+    teacher = await create_random_user(db)
+    teacher.is_teacher = True
+    db.add(teacher)
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=teacher.email, password="testpass"
+    )
+    fake_id = uuid7str()
+
+    response = await client_with_test_db.get(
+        f"{settings.API_V1_STR}/users/{teacher.id}/quizzes/{fake_id}/grade",
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Quiz not found"
+
+
+async def test_manual_grade_quiz_teacher_access(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
+    """
+    Test teacher manually grading a quiz.
+    """
+    # Create student and teacher
+    student = await create_random_user(db)
+    teacher = await create_random_user(db)
+    teacher.is_teacher = True
+    db.add(teacher)
+    teacher_headers = await user_authentication_headers(
+        client=client_with_test_db, email=teacher.email, password="testpass"
+    )
+
+    # Create quiz with exercises
+    exercise1 = await create_random_exercise(db)
+    exercise2 = await create_random_exercise(db)
+    
+    quiz = Quiz(
+        owner_id=student.id,
+        status=QuizStatusChoices.SUBMITTED.value,
+        exercises=[exercise1, exercise2],
+    )
+    db.add(quiz)
+    await db.flush()
+    await db.refresh(quiz)
+
+    # Grade the quiz
+    grading_data = {
+        "corrections": [
+            {"exercise_id": exercise1.id, "is_correct": True},
+            {"exercise_id": exercise2.id, "is_correct": False},
+        ],
+        "feedback": "Good effort!",
+        "status": QuizStatusChoices.GRADED.value,
+    }
+
+    response = await client_with_test_db.put(
+        f"{settings.API_V1_STR}/users/{student.id}/quizzes/{quiz.id}/grade",
+        headers=teacher_headers,
+        json=grading_data,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Quiz manually graded successfully"
+
+    # Verify the updates were saved
+    await db.refresh(quiz)
+    assert quiz.final_score == 50.0  # 1 out of 2 correct
+    assert quiz.feedback == "Good effort!"
+    assert quiz.graded_at is not None
+    assert quiz.graded_by_id == teacher.id
+    assert quiz.status == QuizStatusChoices.GRADED.value
+
+
+async def test_manual_grade_quiz_not_teacher(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
+    """
+    Test that non-teachers cannot grade quizzes.
+    """
+    user = await create_random_user(db)  # regular user
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
+
+    quiz = await create_random_quiz(db)
+    await db.exec(
+        update(Quiz)
+        .where(Quiz.id == quiz.id)
+        .values(status=QuizStatusChoices.SUBMITTED.value)
+    )
+    await db.flush()
+
+    grading_data = {
+        "corrections": [{"exercise_id": "1", "is_correct": True}],
+    }
+
+    response = await client_with_test_db.put(
+        f"{settings.API_V1_STR}/users/{quiz.owner_id}/quizzes/{quiz.id}/grade",
+        headers=headers,
+        json=grading_data,
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only teachers can grade quizzes."
+
+
+async def test_manual_grade_quiz_quiz_not_found(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
+    """
+    Test grading a non-existent quiz.
+    """
+    teacher = await create_random_user(db)
+    teacher.is_teacher = True
+    db.add(teacher)
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=teacher.email, password="testpass"
+    )
+    fake_id = uuid7str()
+
+    grading_data = {
+        "corrections": [{"exercise_id": "1", "is_correct": True}],
+    }
+
+    response = await client_with_test_db.put(
+        f"{settings.API_V1_STR}/users/{teacher.id}/quizzes/{fake_id}/grade",
+        headers=headers,
+        json=grading_data,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Quiz not found"
+
+
+async def test_manual_grade_quiz_invalid_exercise_id(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
+    """
+    Test grading with an exercise ID that's not in the quiz.
+    """
+    student = await create_random_user(db)
+    teacher = await create_random_user(db)
+    teacher.is_teacher = True
+    db.add(teacher)
+    teacher_headers = await user_authentication_headers(
+        client=client_with_test_db, email=teacher.email, password="testpass"
+    )
+
+    # Create quiz with one exercise
+    exercise = await create_random_exercise(db)
+    quiz = Quiz(owner_id=student.id, exercises=[exercise], status=QuizStatusChoices.SUBMITTED.value)
+    db.add(quiz)
+    await db.flush()
+    await db.refresh(quiz)
+
+    # Try to grade with invalid exercise ID
+    grading_data = {
+        "corrections": [{"exercise_id": "nonexistent", "is_correct": True}],
+    }
+
+    response = await client_with_test_db.put(
+        f"{settings.API_V1_STR}/users/{student.id}/quizzes/{quiz.id}/grade",
+        headers=teacher_headers,
+        json=grading_data,
+    )
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "extra corrections" in detail
+    assert "nonexistent" in detail
+
+
+async def test_manual_grade_quiz_partial_corrections(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
+    """Test that grading only some exercises fails — full grading required."""
+
+    student = await create_random_user(db)
+    teacher = await create_random_user(db)
+    teacher.is_teacher = True
+    db.add(teacher)
+    teacher_headers = await user_authentication_headers(
+        client=client_with_test_db, email=teacher.email, password="testpass"
+    )
+
+    # Create quiz with two exercises
+    exercise1 = await create_random_exercise(db)
+    exercise2 = await create_random_exercise(db)
+    quiz = Quiz(
+        owner_id=student.id,
+        exercises=[exercise1, exercise2],
+        status=QuizStatusChoices.SUBMITTED.value,
+    )
+    db.add(quiz)
+    await db.flush()
+    await db.refresh(quiz)
+
+    # Grade only one exercise
+    grading_data = {
+        "corrections": [{"exercise_id": exercise1.id, "is_correct": True}],
+    }
+
+    response = await client_with_test_db.put(
+        f"{settings.API_V1_STR}/users/{student.id}/quizzes/{quiz.id}/grade",
+        headers=teacher_headers,
+        json=grading_data,
+    )
+
+    assert response.status_code == 400
+    assert "missing corrections" in response.json()["detail"]
