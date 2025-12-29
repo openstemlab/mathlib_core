@@ -14,7 +14,7 @@ async def get_student_grades(
     session: SessionDep, 
     current_user: CurrentUser
     )->StudentGrades:
-    statement = select(Quiz).where(Quiz.owner_id == student_id).options(selectinload(Quiz.owner)).order_by(Quiz.submitted_at.desc())
+    statement = select(Quiz).where(Quiz.owner_id == student_id, Quiz.submitted_at.is_not(None)).options(selectinload(Quiz.owner)).order_by(Quiz.submitted_at.desc())
     quizzes = (await session.exec(statement)).all()
 
     if not quizzes:
@@ -30,8 +30,10 @@ async def get_student_grades(
         )
         grades.append(grade)
 
+    owner = quizzes[0].owner
+    user_name = owner.full_name if owner and owner.full_name else "Unknown"
     return StudentGrades(
-        student_id=student_id,
-        student_name=quizzes[0].owner.full_name if quizzes[0].owner else "Unknown",
+        user_id=student_id,
+        user_name=user_name,
         grades=grades
     )
