@@ -1121,3 +1121,33 @@ class ReorderAttachments(SQLModel):
     """
 
     order_list: list[str]
+
+
+
+class StudentGrades(SQLModel):
+    """Model representing a student's grades.
+
+    Attributes:
+        user_id: Unique identifier for the user.
+        average_score: Average score of the student across quizzes.
+    """
+
+    user_id: str
+    user_name: str | None = None 
+    grades: list["QuizGrade"] = Field(default_factory=list)
+
+
+class QuizGrade(SQLModel):
+    """Model representing a quiz grade.
+
+    Attributes:
+        quiz_id: Unique identifier for the quiz.
+        score: Score achieved in the quiz.
+    """
+
+    quiz_id: str
+    title: str | None = None
+    score: float
+    submitted_at: datetime
+
+

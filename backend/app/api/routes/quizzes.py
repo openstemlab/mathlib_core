@@ -316,7 +316,7 @@ async def view_quiz_for_grading_route(
 
 
 @router.put("/{id}/grade", response_model=Message)
-async def manual_grade_quiz(
+async def manual_grade_quiz_route(
     session: SessionDep,
     current_user: CurrentUser,
     id: str,
