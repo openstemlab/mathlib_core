@@ -70,7 +70,7 @@ async def form_quiz(
         title=title,
         status="new",
     )
-
+    quiz.total_weight = await calculate_quiz_weight(quiz, session)
     session.add(quiz)
     await session.flush()
 
@@ -253,6 +253,8 @@ async def create_quiz(
         )
         session.add(quiz_exercise)
 
+    db_quiz.total_weight = await calculate_quiz_weight(db_quiz, session)
+
     await session.flush()
 
 
@@ -304,6 +306,7 @@ async def update_quiz(
             await session.flush()
         await session.refresh(db_quiz, attribute_names=["quiz_exercises"])
 
+    db_quiz.total_weight = await calculate_quiz_weight(db_quiz, session)
     await session.refresh(db_quiz)
 
     exercises_data = [
@@ -544,7 +547,25 @@ async def calculate_quiz_score(quiz: Quiz, session: AsyncSession) -> float:
     if total_questions == 0:
         return 0.0
 
-    correct_answers = sum(1 for qe in quiz_exercises if qe.is_correct)
+    correct_answers = sum(qe.exercise.weight for qe in quiz_exercises if qe.is_correct)
 
-    score_percentage = (correct_answers / total_questions) * 100.0
+    score_percentage = (correct_answers / quiz.total_weight) * 100 if quiz.total_weight else 0
     return score_percentage
+
+
+async def calculate_quiz_weight(quiz: Quiz, session: AsyncSession) -> int:
+    """Calculate the total weight of a quiz based on its exercises.
+
+    :param quiz: The Quiz object for which the weight is to be calculated.
+    :param session: The database session.
+    :returns: int - The total weight of the quiz.
+    """
+    statement = (
+        select(Exercise.weight)
+        .join(QuizExercise)
+        .where(QuizExercise.quiz_id == quiz.id)
+    )
+    weights = (await session.exec(statement)).all()
+
+    total_weight = sum(weights) if weights else 0
+    return total_weight

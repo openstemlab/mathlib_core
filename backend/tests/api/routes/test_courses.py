@@ -349,8 +349,8 @@ async def test_enroll_already_enrolled(
         f"{settings.API_V1_STR}/courses/{course.id}/enroll",
         headers=headers,
     )
-    assert response.status_code == 400
-    assert response.json()["detail"] == "User already enrolled in this course"
+    assert response.status_code == 200
+    assert response.json()["message"] == "User is already enrolled in this course"
 
 
 async def test_enroll_course_not_found(

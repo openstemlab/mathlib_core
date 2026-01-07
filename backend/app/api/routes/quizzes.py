@@ -353,14 +353,18 @@ async def manual_grade_quiz_route(
         )
 
     correct = 0
-    total = len(quiz.quiz_exercises)
+
     for correction in request.corrections:
         qe = qe_map[correction.exercise_id]
         qe.is_correct = correction.is_correct
         session.add(qe)
         if correction.is_correct:
-            correct += 1
-    quiz.final_score = (correct / total * 100) if total > 0 else 0.0
+            correct += qe.exercise.weight
+
+    if request.final_score is not None:
+        quiz.final_score = request.final_score
+    else:
+        quiz.final_score = (correct / quiz.total_weight * 100) if quiz.total_weight > 0 else 0
 
     # Update grading metadata
     quiz.graded_at = datetime.now(timezone.utc)

@@ -85,7 +85,6 @@ async def create_course_route(
 
     await session.flush()
 
-    await session.refresh(course)
     return await CoursePublic.from_db(session, course)
 
 
@@ -195,9 +194,7 @@ async def enroll_in_course_route(
         raise HTTPException(status_code=404, detail="User not found")
 
     if course in user.enrolled_courses:
-        raise HTTPException(
-            status_code=400, detail="User already enrolled in this course"
-        )
+        return {"message": "User is already enrolled in this course"}
 
     user.enrolled_courses.append(course)
 
@@ -229,10 +226,8 @@ async def unenroll_from_course_route(
         raise HTTPException(status_code=404, detail="User not found")
 
     if course not in user.enrolled_courses:
-        raise HTTPException(
-            status_code=400, detail="User is not enrolled in this course"
-        )
-
+        return {"message": "User is not enrolled in this course"}
+    
     user.enrolled_courses.remove(course)
 
     session.add(user)

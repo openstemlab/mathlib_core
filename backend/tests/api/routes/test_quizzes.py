@@ -865,6 +865,7 @@ async def test_submit_quiz(client_with_test_db: AsyncClient, db: AsyncSession) -
         owner_id=user.id,
         status=QuizStatusChoices.ACTIVE.value,
         exercises=[exercise1, exercise2],
+        total_weight=2,
     )
 
     db.add(quiz)
@@ -886,6 +887,10 @@ async def test_submit_quiz(client_with_test_db: AsyncClient, db: AsyncSession) -
 
     assert response.status_code == 200
     assert response.json()["message"] == "Quiz submitted successfully"
+
+    double_check = await db.get(Quiz, quiz.id)
+    assert double_check.status == QuizStatusChoices.SUBMITTED.value
+    assert double_check.final_score == 100
 
 
 async def test_submit_quiz_no_quiz(
@@ -1196,6 +1201,7 @@ async def test_manual_grade_quiz_teacher_access(
         owner_id=student.id,
         status=QuizStatusChoices.SUBMITTED.value,
         exercises=[exercise1, exercise2],
+        total_weight=2,
     )
     db.add(quiz)
     await db.flush()

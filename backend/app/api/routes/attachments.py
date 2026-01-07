@@ -191,7 +191,6 @@ async def reorder_attachments_in_module(
 
     for idx, att_id in enumerate(order_list.order_list):
         attachment_map[att_id].order = idx
-        session.add(attachment_map[att_id])
 
     await session.flush()
     return Message(message="Attachments reordered.")

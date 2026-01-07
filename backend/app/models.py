@@ -341,9 +341,11 @@ class ExerciseCreate(ExerciseBase):
 
     Attributes:
         solution: Required correct answer to the exercise
+        weight: Weight of the exercise, default is 1
     """
 
     solution: str
+    weight: int = 1
 
 
 class ExerciseUpdate(ExerciseBase):
@@ -407,6 +409,7 @@ class Exercise(ExerciseBase, table=True):
         },
     )
     solution: str
+    weight: int = 1
 
 
 class ExercisePublic(ExerciseBase):
@@ -544,8 +547,9 @@ class Quiz(QuizBase, table=True):
     )
     module_id: str | None = Field(default=None, foreign_key="module.id")
     module: "Module" = Relationship(back_populates="quizzes")
+    total_weight: int = 0
 
-    final_score: float | None = None  # percentage: 0.0 - 100.0
+    final_score: int | None = None  # percentage: 0.0 - 100.0
     feedback: str | None = None
     submitted_at: datetime | None = None
     graded_at: datetime | None = None
@@ -718,6 +722,7 @@ class ManualGradeRequest(SQLModel):
     corrections: list[AnswerCorrection]
     feedback: str | None = None
     status: QuizStatusChoices = QuizStatusChoices.GRADED.value
+    final_score : int| None = None
 
 
 class CourseBase(SQLModel):
