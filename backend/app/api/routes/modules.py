@@ -23,9 +23,13 @@ router = APIRouter(prefix="/modules", tags=["modules"])
 
 @router.get("/", response_model=ModulesPublic)
 async def read_modules_route(
-    session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 10
+    session: SessionDep, 
+    current_user: CurrentUser, 
+    skip: int = 0, 
+    limit: int = 10,
+    query: str ="",
 ):
-    statement = select(Module).order_by(Module.id).offset(skip).limit(limit)
+    statement = select(Module).where(Module.title.icontains(f"%{query}%")).order_by(Module.id).offset(skip).limit(limit)
     modules = (await session.exec(statement)).all()
 
     if not modules:
@@ -33,7 +37,7 @@ async def read_modules_route(
 
     data = [await ModulePublic.from_db(db=session, module=module) for module in modules]
 
-    count_statement = select(func.count()).select_from(Module)
+    count_statement = select(func.count()).select_from(Module).where(Module.title.icontains(f"%{query}%"))
     total_count = (await session.exec(count_statement)).one()
     return ModulesPublic(
         data=data[skip : skip + limit],

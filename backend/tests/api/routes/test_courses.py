@@ -131,6 +131,32 @@ async def test_read_courses_pagination(
     assert course.id in [c["id"] for c in content["data"]]
 
 
+async def test_read_courses_with_filter(
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
+):
+    # Create courses
+    user = await create_random_user(db)
+    course1 = Course(title="Algebra Basics", author_id=user.id)
+    course2 = Course(title="Advanced Algebra", author_id=user.id)
+    course3 = Course(title="History 101", author_id=user.id)
+    db.add_all([course1, course2, course3])
+    await db.flush()
+
+    response = await client_with_test_db.get(
+        f"{settings.API_V1_STR}/courses/?query=Algebra",
+        headers=normal_user_token_headers,
+    )
+    assert response.status_code == 200
+    content = response.json()
+    assert content["count"] == 2
+    titles = [c["title"] for c in content["data"]]
+    assert "Algebra Basics" in titles
+    assert "Advanced Algebra" in titles
+    assert "History 101" not in titles
+
+
 async def test_read_course_by_id(
     client_with_test_db: AsyncClient,
     normal_user_token_headers: dict[str, str],

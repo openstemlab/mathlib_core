@@ -24,15 +24,18 @@ async def read_attachments_route(
     current_user: CurrentUser,
     skip: int = 0,
     limit: int = 10,
+    query: str ="",
 ):
     """
     Retrieve a list of attachments with pagination.
     Accessible to all authenticated users.
     """
-    count_statement = select(func.count()).select_from(Attachment)
+    count_statement = select(func.count()).select_from(Attachment).where(
+        Attachment.title.icontains(f"%{query}%")
+    )
     total_count = (await session.exec(count_statement)).one()
 
-    statement = select(Attachment).offset(skip).limit(limit)
+    statement = select(Attachment).where(Attachment.title.icontains(f"%{query}%")).order_by(Attachment.title).offset(skip).limit(limit)
     attachments = (await session.exec(statement)).all()
 
     if not attachments:

@@ -95,13 +95,14 @@ async def read_courses_route(
     current_user: CurrentUser,
     skip: int = 0,
     limit: int = 10,
+    query: str ="",
 ):
     """
     Retrieve courses with pagination.
     """
-    statement = select(Course).order_by(Course.id)
+    statement = select(Course).where(Course.title.icontains(f"%{query}%")).order_by(Course.id)
     courses = (await session.exec(statement.offset(skip).limit(limit))).all()
-    count_statement = select(func.count()).select_from(Course)
+    count_statement = select(func.count()).select_from(Course).where(Course.title.icontains(f"%{query}%"))
     total_count = (await session.exec(count_statement)).one()
     courses_public = [
         (await CoursePublic.from_db(session, course)) for course in courses
