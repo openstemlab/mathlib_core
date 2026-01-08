@@ -2,6 +2,7 @@ from uuid_extensions import uuid7str
 import pytest
 from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
+from secrets import token_urlsafe
 
 from app.core.config import settings
 from app.models import Course, User
@@ -298,7 +299,11 @@ async def test_enroll_in_course(
 ):
     # Create course
     author = await create_random_user(db)
-    course = Course(title="Enrollable Course", author_id=author.id)
+    course = Course(
+        title="Enrollable Course", 
+        author_id=author.id,
+        token=token_urlsafe(16)
+    )
     db.add(course)
     await db.flush()
     await db.refresh(course)
@@ -310,7 +315,7 @@ async def test_enroll_in_course(
     )
     # Enroll
     response = await client_with_test_db.post(
-        f"{settings.API_V1_STR}/courses/{course.id}/enroll",
+        f"{settings.API_V1_STR}/courses/enroll/{course.token}",
         headers=headers,
     )
     assert response.status_code == 200
@@ -335,7 +340,12 @@ async def test_enroll_already_enrolled(
     db.add(author)
     db.add(user)
 
-    course = Course(title="Repeatable Course", author_id=author.id, attendants=[user])
+    course = Course(
+        title="Repeatable Course", 
+        author_id=author.id, 
+        attendants=[user],
+        token=token_urlsafe(16)
+    )
     db.add(course)
     await db.flush()
     await db.refresh(course)
@@ -346,7 +356,7 @@ async def test_enroll_already_enrolled(
 
     # Try to re-enroll
     response = await client_with_test_db.post(
-        f"{settings.API_V1_STR}/courses/{course.id}/enroll",
+        f"{settings.API_V1_STR}/courses/enroll/{course.token}",
         headers=headers,
     )
     assert response.status_code == 200
@@ -356,10 +366,75 @@ async def test_enroll_already_enrolled(
 async def test_enroll_course_not_found(
     client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str]
 ):
-    fake_id = uuid7str()
+    fake_id = token_urlsafe(16)
     response = await client_with_test_db.post(
-        f"{settings.API_V1_STR}/courses/{fake_id}/enroll",
+        f"{settings.API_V1_STR}/courses/enroll/{fake_id}",
         headers=normal_user_token_headers,
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "Course not found"
+
+
+async def test_unenroll_from_course(
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
+):
+    # Create course
+    author = await create_random_user(db)
+    user = await create_random_user(db)
+    db.add(author)
+    db.add(user)
+
+    course = Course(
+        title="Unenrollable Course", 
+        author_id=author.id, 
+        attendants=[user]
+    )
+    db.add(course)
+    await db.flush()
+    await db.refresh(course)
+
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=user.email, password="testpass"
+    )
+
+    # Unenroll
+    response = await client_with_test_db.post(
+        f"{settings.API_V1_STR}/courses/unenroll/{course.id}",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["message"] == "User unenrolled from course successfully"
+
+
+
+async def test_generate_invite_token(
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
+):
+    # Create course
+    author = await create_random_user(db)
+    course = Course(title="Invitable Course", author_id=author.id)
+    db.add(course)
+    await db.flush()
+    await db.refresh(course)
+
+    headers = await user_authentication_headers(
+        client=client_with_test_db, email=author.email, password="testpass"
+    )
+
+    # Generate invite token
+    response = await client_with_test_db.post(
+        f"{settings.API_V1_STR}/courses/{course.id}/generate-invite",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    content = response.json()
+    assert content["invite_token"] is not None
+
+    # Verify token is saved in DB
+    await db.refresh(course)
+    assert course.token == content["invite_token"]
+

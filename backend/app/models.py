@@ -794,7 +794,8 @@ class Course(CourseBase, table=True):
         link_model=CourseEnrollment,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
-
+    token: str | None = None  # for course access control
+    token_expires_at: datetime | None = None
 
 class CoursePublic(CourseBase):
     """Public representation of a Course. Inherits from CourseBase.

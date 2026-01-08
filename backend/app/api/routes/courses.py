@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from sqlmodel import select, func
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from app.api.deps import CurrentUser, SessionDep
 from app.models import (
@@ -175,23 +177,59 @@ async def delete_course_route(
     return {"message": "Course deleted successfully"}
 
 
-@router.post("/{course_id}/enroll", response_model=dict)
-async def enroll_in_course_route(
+@router.post("/{course_id}/generate-invite", response_model=dict)
+async def generate_invite_token_route(
     *,
     session: SessionDep,
     current_user: CurrentUser,
     course_id: str,
+    request: Request,
+):
+    """
+    Generate a unique invite token for a course.
+    Only the course author can generate the token.
+    """
+    course = await session.get(Course, course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    if course.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    # Generate a secure URL-safe token
+    token = secrets.token_urlsafe(16)  
+    course.token = token
+    course.token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)  # Token valid for 7 days
+
+    session.add(course)
+    await session.flush()
+
+
+    invite_link = f"{request.base_url}/courses/enroll/{token}"
+    return {"invite_token": token, "invite_link": invite_link}
+
+
+@router.post("/enroll/{token}", response_model=dict)
+async def enroll_in_course_route(
+    *,
+    session: SessionDep,
+    current_user: CurrentUser,
+    token: str,
 ):
     """
     Enroll the current user in a course.
     """
-    course = await session.get(Course, course_id)
+    stmnt = select(Course).where(Course.token == token)
+    course = (await session.exec(stmnt)).first()
+
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
     user = await session.get(User, current_user.id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    if course.token != token or (course.token_expires_at and course.token_expires_at < datetime.now(timezone.utc)):
+        raise HTTPException(status_code=403, detail="Link token is invalid")
 
     if course in user.enrolled_courses:
         return {"message": "User is already enrolled in this course"}
@@ -207,7 +245,7 @@ async def enroll_in_course_route(
     return {"message": "User enrolled in course successfully"}
 
 
-@router.post("/{course_id}/unenroll", response_model=dict)
+@router.post("/unenroll/{course_id}", response_model=dict)
 async def unenroll_from_course_route(
     *,
     session: SessionDep,
