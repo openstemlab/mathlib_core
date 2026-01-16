@@ -21,19 +21,25 @@ async def test_get_access_token(client_with_test_db: AsyncClient) -> None:
         "username": settings.FIRST_SUPERUSER,
         "password": settings.FIRST_SUPERUSER_PASSWORD,
     }
-    r = await client_with_test_db.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = await client_with_test_db.post(
+        f"{settings.API_V1_STR}/login/access-token", data=login_data
+    )
     tokens = r.json()
     assert r.status_code == 200
     assert "access_token" in tokens
     assert tokens["access_token"]
 
 
-async def test_get_access_token_incorrect_password(client_with_test_db: AsyncClient) -> None:
+async def test_get_access_token_incorrect_password(
+    client_with_test_db: AsyncClient,
+) -> None:
     login_data = {
         "username": settings.FIRST_SUPERUSER,
         "password": "incorrect",
     }
-    r = await client_with_test_db.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = await client_with_test_db.post(
+        f"{settings.API_V1_STR}/login/access-token", data=login_data
+    )
     assert r.status_code == 400
 
 
@@ -76,7 +82,9 @@ async def test_recovery_password_user_not_exits(
     assert r.status_code == 404
 
 
-async def test_reset_password(client_with_test_db: AsyncClient, db: AsyncSession) -> None:
+async def test_reset_password(
+    client_with_test_db: AsyncClient, db: AsyncSession
+) -> None:
     email = random_email()
     password = random_lower_string()
     new_password = random_lower_string()

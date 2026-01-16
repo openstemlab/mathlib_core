@@ -30,7 +30,9 @@ async def test_create_item(
 
 
 async def test_read_item(
-    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
 ) -> None:
     item = await create_random_item(db)
     response = await client_with_test_db.get(
@@ -58,7 +60,9 @@ async def test_read_item_not_found(
 
 
 async def test_read_item_not_enough_permissions(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
 ) -> None:
     item = await create_random_item(db)
     response = await client_with_test_db.get(
@@ -71,7 +75,9 @@ async def test_read_item_not_enough_permissions(
 
 
 async def test_read_items(
-    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
 ) -> None:
     await create_random_item(db)
     await create_random_item(db)
@@ -85,7 +91,9 @@ async def test_read_items(
 
 
 async def test_update_item(
-    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
 ) -> None:
     item = await create_random_item(db)
     data = {"title": "Updated title", "description": "Updated description"}
@@ -117,7 +125,9 @@ async def test_update_item_not_found(
 
 
 async def test_update_item_not_enough_permissions(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
 ) -> None:
     item = await create_random_item(db)
     data = {"title": "Updated title", "description": "Updated description"}
@@ -132,7 +142,9 @@ async def test_update_item_not_enough_permissions(
 
 
 async def test_delete_item(
-    client_with_test_db: AsyncClient, superuser_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient,
+    superuser_token_headers: dict[str, str],
+    db: Session,
 ) -> None:
     item = await create_random_item(db)
     response = await client_with_test_db.delete(
@@ -157,7 +169,9 @@ async def test_delete_item_not_found(
 
 
 async def test_delete_item_not_enough_permissions(
-    client_with_test_db: AsyncClient, normal_user_token_headers: dict[str, str], db: Session
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
 ) -> None:
     item = await create_random_item(db)
     response = await client_with_test_db.delete(
