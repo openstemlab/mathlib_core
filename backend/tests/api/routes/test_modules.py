@@ -158,6 +158,48 @@ async def test_read_modules_empty_list(
     assert content["data"] == []
 
 
+async def test_read_modules_with_query(
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
+):
+    # Arrange
+    user = await create_random_user(db)
+    course = Course(title="Chemistry 101", author_id=user.id)
+    db.add(course)
+    await db.flush()
+
+    module1 = Module(
+        title="Organic Chemistry",
+        content="Carbon compounds",
+        course=course,
+        order=1,
+        author_id=user.id,
+    )
+    module2 = Module(
+        title="Basic Chemistry",
+        content="Non-carbon compounds",
+        course=course,
+        order=2,
+        author_id=user.id,
+    )
+    db.add_all([module1, module2])
+    await db.flush()
+
+    # Act
+    response = await client_with_test_db.get(
+        f"{settings.API_V1_STR}/modules/?query=Organic",
+        headers=normal_user_token_headers,
+    )
+
+    # Assert
+    assert response.status_code == 200
+    content = response.json()
+    assert content["count"] == 1
+    assert len(content["data"]) == 1
+    assert content["data"][0]["id"] == str(module1.id)
+
+
 async def test_read_module_by_id(
     client_with_test_db: AsyncClient,
     normal_user_token_headers: dict[str, str],

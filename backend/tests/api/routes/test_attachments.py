@@ -184,6 +184,44 @@ async def test_read_attachments_empty_list(
     assert content["data"] == []
 
 
+async def test_read_attachments_with_query(
+    client_with_test_db: AsyncClient,
+    normal_user_token_headers: dict[str, str],
+    db: AsyncSession,
+):
+    """
+    Test listing attachments with a search query.
+    """
+    # Create attachments
+    att1 = Attachment(
+        title="Algebra Basics",
+        file_url="https://ex.com/algebra.pdf",
+        type="pdf",
+        order=0,
+    )
+    att2 = Attachment(
+        title="Calculus Advanced",
+        file_url="https://ex.com/calculus.pdf",
+        type="pdf",
+        order=1,
+    )
+    db.add_all([att1, att2])
+    await db.flush()
+    await db.refresh(att1)
+    await db.refresh(att2)
+
+    response = await client_with_test_db.get(
+        f"{settings.API_V1_STR}/attachments/?query=Algebra",
+        headers=normal_user_token_headers,
+    )
+
+    assert response.status_code == 200
+    content = response.json()
+    assert content["count"] == 1
+    assert len(content["data"]) == 1
+    assert content["data"][0]["title"] == "Algebra Basics"
+
+
 async def test_read_attachment_by_id(
     client_with_test_db: AsyncClient,
     normal_user_token_headers: dict[str, str],

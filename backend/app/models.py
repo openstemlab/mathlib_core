@@ -125,7 +125,9 @@ class User(UserBase, table=True):
     quizzes: list["Quiz"] = Relationship(
         back_populates="owner",
         cascade_delete=True,
-        sa_relationship_kwargs={"lazy": "selectin"},
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "Quiz.owner_id",},
     )
     modules: list["UserModuleProgress"] = Relationship(
         back_populates="user",
@@ -137,6 +139,7 @@ class User(UserBase, table=True):
         link_model=CourseEnrollment,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+    is_teacher: bool = False
 
 
 # Properties to return via API, id is always required
@@ -310,6 +313,7 @@ class QuizExercise(SQLModel, table=True):
     exercise: "Exercise" = Relationship(back_populates="quiz_exercises")
     position: int = 0
     is_correct: bool | None = None
+    given_answer: str | None = None
 
 
 class ExerciseBase(SQLModel):
@@ -337,9 +341,11 @@ class ExerciseCreate(ExerciseBase):
 
     Attributes:
         solution: Required correct answer to the exercise
+        weight: Weight of the exercise, default is 1
     """
 
     solution: str
+    weight: int = 1
 
 
 class ExerciseUpdate(ExerciseBase):
@@ -403,6 +409,7 @@ class Exercise(ExerciseBase, table=True):
         },
     )
     solution: str
+    weight: int = 1
 
 
 class ExercisePublic(ExerciseBase):
@@ -492,12 +499,26 @@ class Quiz(QuizBase, table=True):
         exercises: list of Exercise objects representing exercises included in the quiz
         status: status of the quiz - new/active/submitted/graded.
         quiz_exercises: list of QuizExercise objects for quick access to positions and scores.
+        module_id: Optional unique identifier for the module the quiz belongs to.
+        module: Module object representing the module the quiz belongs to.
+        final_score: Optional final score of the quiz.
+        feedback: Optional feedback for the quiz.
+        submitted_at: Optional timestamp when the quiz was submitted.
+        graded_at: Optional timestamp when the quiz was graded.
+        graded_by_id: Optional unique identifier for the user who graded the quiz.
+        graded_by: Optional User object representing the grader of the quiz.
     """
 
     __tablename__ = "quiz"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
-    owner: User | None = Relationship(back_populates="quizzes")
+    owner: User | None = Relationship(
+        back_populates="quizzes",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "Quiz.owner_id",  # ← Add this
+        },
+        )
     exercises: list["Exercise"] = Relationship(
         back_populates="quizzes",
         link_model=QuizExercise,
@@ -526,6 +547,15 @@ class Quiz(QuizBase, table=True):
     )
     module_id: str | None = Field(default=None, foreign_key="module.id")
     module: "Module" = Relationship(back_populates="quizzes")
+    total_weight: int = 0
+
+    final_score: int | None = None  # percentage: 0.0 - 100.0
+    feedback: str | None = None
+    submitted_at: datetime | None = None
+    graded_at: datetime | None = None
+    graded_by_id: str | None = Field(default=None, foreign_key="user.id", ondelete="SET NULL")
+    graded_by: User | None = Relationship(sa_relationship_kwargs={"lazy": "selectin", "foreign_keys": "Quiz.graded_by_id"})
+
 
 
 class QuizExerciseData(SQLModel):
@@ -560,14 +590,22 @@ class QuizPublic(QuizBase):
         owner_id: Unique identifier for the user who created the quiz.
         exercises: list of Exercise objects representing exercises included in the quiz
         status: status of the quiz - new/active/submitted/graded.
+        submitted_at: Optional timestamp when the quiz was submitted.
+        final_score: Optional final score of the quiz.
+        feedback: Optional feedback for the quiz.
+        graded_at: Optional timestamp when the quiz was graded.
+        graded_by_id: Optional unique identifier for the user who graded the quiz.
     """
 
     id: str
     owner_id: str
-    exercises: list[
-        QuizExerciseDataPublic
-    ]  # list of {"exercise": ExercisePublic, "position": int}
+    exercises: list[QuizExerciseDataPublic] = Field(default_factory=list)
     status: str
+    submitted_at: datetime | None = None
+    final_score: float | None = None
+    feedback: str | None = None
+    graded_at: datetime | None = None
+    graded_by_id: str | None = None
 
 
 class QuizzesPublic(SQLModel):
@@ -604,6 +642,87 @@ class StartQuizRequest(SQLModel):
     tags: list[str] | None = Field(default_factory=list)
     length: int = Field(default=5, le=500)
     title: str | None = Field(default=None, max_length=255)
+
+
+class QuizExerciseForGrading(SQLModel):
+    """
+    Model for teacher-facing quiz review. Includes student's answer and correctness.
+    Not exposed to regular quiz responses.
+    """
+    exercise: ExercisePublic
+    position: int
+    solution: str | None = None
+    given_answer: str | None = None
+    is_correct: bool | None = None  # can be None if not yet graded
+
+    async def from_db(db: AsyncSession, quiz_exercise: QuizExercise) -> "QuizExerciseForGrading":
+
+        statement = select(Exercise).where(Exercise.id == quiz_exercise.exercise_id)
+        result = (await db.exec(statement)).one()
+        exercise = ExercisePublic.model_validate(result)
+        return QuizExerciseForGrading(
+            exercise=exercise,
+            position=quiz_exercise.position,
+            solution=result.solution,
+            given_answer=quiz_exercise.given_answer,
+            is_correct=quiz_exercise.is_correct
+        )
+
+class QuizForGrading(SQLModel):
+    """Model for teacher-facing quiz review. Includes detailed exercise data for grading. Should not be exposed to students.
+
+    Attributes:
+        id: Unique identifier for the quiz.
+        owner_id: Unique identifier for the user who created the quiz.
+        owner_name: Optional full name of the quiz owner.
+        title: Optional title of the quiz.
+        status: Status of the quiz.
+        submitted_at: Timestamp when the quiz was submitted.
+        exercises: List of QuizExerciseForGrading objects representing exercises in the quiz.
+        final_score: Optional final score of the quiz.
+        feedback: Optional feedback for the quiz.
+        graded_at: Optional timestamp when the quiz was graded.
+        graded_by_id: Optional unique identifier for the user who graded the quiz.
+        graded_by_name: Optional full name of the user who graded the quiz.
+        """
+    id: str
+    owner_id: str
+    owner_name: str | None = None  # e.g., full_name
+    title: str | None = None
+    status: str
+    submitted_at: datetime | None = None  # could be set on submit
+    exercises: list[QuizExerciseForGrading]
+    final_score: float | None = None
+    feedback: str | None = None
+    graded_at: datetime | None = None
+    graded_by_id: str | None = None
+    graded_by_name: str | None = None
+
+
+
+class AnswerCorrection(SQLModel):
+    """Model for saving corrections to individual answers in a quiz.
+
+    Attributes:
+        exercise_id: Unique identifier for the exercise.
+        is_correct: Boolean indicating if the answer is correct.
+        """
+    exercise_id: str
+    is_correct: bool
+
+
+class ManualGradeRequest(SQLModel):
+    """Model for submitting manual grades for a quiz.
+    Attributes:
+        corrections: list of AnswerCorrection objects representing corrections to individual answers.
+        feedback: Optional feedback for the quiz.
+        status: Status of the quiz after grading.
+        """
+
+    corrections: list[AnswerCorrection]
+    feedback: str | None = None
+    status: QuizStatusChoices = QuizStatusChoices.GRADED.value
+    final_score : int| None = None
 
 
 class CourseBase(SQLModel):
@@ -675,7 +794,8 @@ class Course(CourseBase, table=True):
         link_model=CourseEnrollment,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
-
+    token: str | None = None  # for course access control
+    token_expires_at: datetime | None = None
 
 class CoursePublic(CourseBase):
     """Public representation of a Course. Inherits from CourseBase.
@@ -1057,3 +1177,33 @@ class ReorderAttachments(SQLModel):
     """
 
     order_list: list[str]
+
+
+
+class StudentGrades(SQLModel):
+    """Model representing a student's grades.
+
+    Attributes:
+        user_id: Unique identifier for the user.
+        average_score: Average score of the student across quizzes.
+    """
+
+    user_id: str
+    user_name: str | None = None 
+    grades: list["QuizGrade"] = Field(default_factory=list)
+
+
+class QuizGrade(SQLModel):
+    """Model representing a quiz grade.
+
+    Attributes:
+        quiz_id: Unique identifier for the quiz.
+        score: Score achieved in the quiz.
+    """
+
+    quiz_id: str
+    title: str | None = None
+    score: float
+    submitted_at: datetime
+
+

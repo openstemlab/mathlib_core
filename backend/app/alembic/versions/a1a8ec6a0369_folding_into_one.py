@@ -1,8 +1,8 @@
-"""folding everything in 1
+"""folding_into_one
 
-Revision ID: 277873538894
+Revision ID: a1a8ec6a0369
 Revises: 
-Create Date: 2025-12-17 07:44:48.213375
+Create Date: 2025-12-29 21:18:47.874985
 
 """
 from alembic import op
@@ -11,7 +11,7 @@ import sqlmodel.sql.sqltypes
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '277873538894'
+revision = 'a1a8ec6a0369'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -37,6 +37,7 @@ def upgrade():
     sa.Column('full_name', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=True),
     sa.Column('id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('hashed_password', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('is_teacher', sa.Boolean(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_user_email'), 'user', ['email'], unique=True)
@@ -94,6 +95,12 @@ def upgrade():
     sa.Column('owner_id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('status', sa.String(), nullable=False),
     sa.Column('module_id', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.Column('final_score', sa.Float(), nullable=True),
+    sa.Column('feedback', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.Column('submitted_at', sa.DateTime(), nullable=True),
+    sa.Column('graded_at', sa.DateTime(), nullable=True),
+    sa.Column('graded_by_id', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.ForeignKeyConstraint(['graded_by_id'], ['user.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['module_id'], ['module.id'], ),
     sa.ForeignKeyConstraint(['owner_id'], ['user.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
@@ -115,6 +122,7 @@ def upgrade():
     sa.Column('exercise_id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('position', sa.Integer(), nullable=False),
     sa.Column('is_correct', sa.Boolean(), nullable=True),
+    sa.Column('given_answer', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
     sa.ForeignKeyConstraint(['exercise_id'], ['exercise.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['quiz_id'], ['quiz.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('quiz_id', 'exercise_id')
@@ -140,7 +148,7 @@ def downgrade():
     op.drop_table('item')
     op.drop_table('course')
     op.drop_index(op.f('ix_user_email'), table_name='user')
-    op.drop_index('idx_active_quiz_per_user', table_name='quiz')
     op.drop_table('user')
     op.drop_table('exercise')
+    op.drop_index('idx_active_quiz_per_user', table_name='quiz')
     # ### end Alembic commands ###
