@@ -340,6 +340,12 @@ class ExerciseCreate(ExerciseBase):
     """Model for creating a new exercise.
 
     Attributes:
+        source_name: Source of an excercise.
+        source_id: id of an exercise in a given source.
+        text: Text of an exercise.
+        answers: list of all answers to the exercise to put in a quiz
+        formula: formula for the exercise, if given
+        illustration: illustration for the exercise, if given
         solution: Required correct answer to the exercise
         weight: Weight of the exercise, default is 1
     """
@@ -367,6 +373,7 @@ class ExerciseUpdate(ExerciseBase):
     solution: str | None = None
     illustration: list[str] | None = None
     tags: list[str] | None = None
+    weight: int|None = None
 
 
 class Exercise(ExerciseBase, table=True):
@@ -588,7 +595,7 @@ class QuizPublic(QuizBase):
     Attributes:
         id: Unique identifier for the quiz.
         owner_id: Unique identifier for the user who created the quiz.
-        exercises: list of Exercise objects representing exercises included in the quiz
+        exercises: list of QuizExerciseDataPublic objects representing exercises included in the quiz
         status: status of the quiz - new/active/submitted/graded.
         submitted_at: Optional timestamp when the quiz was submitted.
         final_score: Optional final score of the quiz.
@@ -1185,7 +1192,8 @@ class StudentGrades(SQLModel):
 
     Attributes:
         user_id: Unique identifier for the user.
-        average_score: Average score of the student across quizzes.
+        user_name: Optional name of the user.
+        grades: List of QuizGrade objects representing the user's quiz grades.
     """
 
     user_id: str
@@ -1198,12 +1206,14 @@ class QuizGrade(SQLModel):
 
     Attributes:
         quiz_id: Unique identifier for the quiz.
+        title: Optional title of the quiz.
         score: Score achieved in the quiz.
+        submitted_at: Timestamp when the quiz was submitted.
     """
 
     quiz_id: str
     title: str | None = None
-    score: float
+    score: int
     submitted_at: datetime
 
 

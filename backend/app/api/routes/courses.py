@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, status, Request
 from sqlmodel import select, func
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from app.core.config import settings
 from app.api.deps import CurrentUser, SessionDep
 from app.models import (
     Course,
@@ -183,7 +184,6 @@ async def generate_invite_token_route(
     session: SessionDep,
     current_user: CurrentUser,
     course_id: str,
-    request: Request,
 ):
     """
     Generate a unique invite token for a course.
@@ -204,7 +204,7 @@ async def generate_invite_token_route(
     await session.flush()
 
 
-    invite_link = f"{request.base_url}/courses/enroll/{token}"
+    invite_link = f"{settings.INVITE_FRONTEND_URL}/{token}"
     return {"invite_token": token, "invite_link": invite_link}
 
 
