@@ -116,7 +116,6 @@ async def test_deactivate_quizzes(db: AsyncSession):
     active_quiz1 = Quiz(owner_id=user.id, status=QuizStatusChoices.ACTIVE.value)
     db.add(active_quiz1)
 
-
     # Create inactive quiz
     inactive_quiz = Quiz(owner_id=user.id, status=QuizStatusChoices.IN_PROGRESS.value)
     db.add(inactive_quiz)

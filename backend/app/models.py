@@ -1,10 +1,23 @@
 from uuid_extensions import uuid7str
 from enum import Enum
+from datetime import datetime, timezone
+from typing import Any
+
 
 from pydantic import EmailStr
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship, SQLModel, select
 from sqlalchemy import Column, String, CheckConstraint
+from sqlalchemy.orm import selectinload
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import UniqueConstraint
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+
+# Join table: Course <-> User (enrollments)
+class CourseEnrollment(SQLModel, table=True):
+    __tablename__ = "courseenrollment"
+    course_id: str = Field(foreign_key="course.id", primary_key=True)
+    user_id: str = Field(foreign_key="user.id", primary_key=True)
 
 
 # Shared properties
@@ -112,8 +125,21 @@ class User(UserBase, table=True):
     quizzes: list["Quiz"] = Relationship(
         back_populates="owner",
         cascade_delete=True,
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "Quiz.owner_id",},
+    )
+    modules: list["UserModuleProgress"] = Relationship(
+        back_populates="user",
+        cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+    enrolled_courses: list["Course"] = Relationship(
+        back_populates="attendants",
+        link_model=CourseEnrollment,
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+    is_teacher: bool = False
 
 
 # Properties to return via API, id is always required
@@ -287,6 +313,7 @@ class QuizExercise(SQLModel, table=True):
     exercise: "Exercise" = Relationship(back_populates="quiz_exercises")
     position: int = 0
     is_correct: bool | None = None
+    given_answer: str | None = None
 
 
 class ExerciseBase(SQLModel):
@@ -313,10 +340,18 @@ class ExerciseCreate(ExerciseBase):
     """Model for creating a new exercise.
 
     Attributes:
+        source_name: Source of an excercise.
+        source_id: id of an exercise in a given source.
+        text: Text of an exercise.
+        answers: list of all answers to the exercise to put in a quiz
+        formula: formula for the exercise, if given
+        illustration: illustration for the exercise, if given
         solution: Required correct answer to the exercise
+        weight: Weight of the exercise, default is 1
     """
 
     solution: str
+    weight: int = 1
 
 
 class ExerciseUpdate(ExerciseBase):
@@ -338,6 +373,7 @@ class ExerciseUpdate(ExerciseBase):
     solution: str | None = None
     illustration: list[str] | None = None
     tags: list[str] | None = None
+    weight: int|None = None
 
 
 class Exercise(ExerciseBase, table=True):
@@ -380,6 +416,7 @@ class Exercise(ExerciseBase, table=True):
         },
     )
     solution: str
+    weight: int = 1
 
 
 class ExercisePublic(ExerciseBase):
@@ -469,12 +506,26 @@ class Quiz(QuizBase, table=True):
         exercises: list of Exercise objects representing exercises included in the quiz
         status: status of the quiz - new/active/submitted/graded.
         quiz_exercises: list of QuizExercise objects for quick access to positions and scores.
+        module_id: Optional unique identifier for the module the quiz belongs to.
+        module: Module object representing the module the quiz belongs to.
+        final_score: Optional final score of the quiz.
+        feedback: Optional feedback for the quiz.
+        submitted_at: Optional timestamp when the quiz was submitted.
+        graded_at: Optional timestamp when the quiz was graded.
+        graded_by_id: Optional unique identifier for the user who graded the quiz.
+        graded_by: Optional User object representing the grader of the quiz.
     """
 
     __tablename__ = "quiz"
     id: str = Field(default_factory=uuid7str, primary_key=True)
     owner_id: str = Field(foreign_key="user.id", nullable=False, ondelete="CASCADE")
-    owner: User | None = Relationship(back_populates="quizzes")
+    owner: User | None = Relationship(
+        back_populates="quizzes",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "Quiz.owner_id",  # ← Add this
+        },
+        )
     exercises: list["Exercise"] = Relationship(
         back_populates="quizzes",
         link_model=QuizExercise,
@@ -501,6 +552,17 @@ class Quiz(QuizBase, table=True):
         back_populates="quiz",
         sa_relationship_kwargs={"lazy": "selectin", "overlaps": "exercises,quizzes"},
     )
+    module_id: str | None = Field(default=None, foreign_key="module.id")
+    module: "Module" = Relationship(back_populates="quizzes")
+    total_weight: int = 0
+
+    final_score: int | None = None  # percentage: 0.0 - 100.0
+    feedback: str | None = None
+    submitted_at: datetime | None = None
+    graded_at: datetime | None = None
+    graded_by_id: str | None = Field(default=None, foreign_key="user.id", ondelete="SET NULL")
+    graded_by: User | None = Relationship(sa_relationship_kwargs={"lazy": "selectin", "foreign_keys": "Quiz.graded_by_id"})
+
 
 
 class QuizExerciseData(SQLModel):
@@ -533,16 +595,24 @@ class QuizPublic(QuizBase):
     Attributes:
         id: Unique identifier for the quiz.
         owner_id: Unique identifier for the user who created the quiz.
-        exercises: list of Exercise objects representing exercises included in the quiz
+        exercises: list of QuizExerciseDataPublic objects representing exercises included in the quiz
         status: status of the quiz - new/active/submitted/graded.
+        submitted_at: Optional timestamp when the quiz was submitted.
+        final_score: Optional final score of the quiz.
+        feedback: Optional feedback for the quiz.
+        graded_at: Optional timestamp when the quiz was graded.
+        graded_by_id: Optional unique identifier for the user who graded the quiz.
     """
 
     id: str
     owner_id: str
-    exercises: list[
-        QuizExerciseDataPublic
-    ]  # list of {"exercise": ExercisePublic, "position": int}
+    exercises: list[QuizExerciseDataPublic] = Field(default_factory=list)
     status: str
+    submitted_at: datetime | None = None
+    final_score: float | None = None
+    feedback: str | None = None
+    graded_at: datetime | None = None
+    graded_by_id: str | None = None
 
 
 class QuizzesPublic(SQLModel):
@@ -579,3 +649,571 @@ class StartQuizRequest(SQLModel):
     tags: list[str] | None = Field(default_factory=list)
     length: int = Field(default=5, le=500)
     title: str | None = Field(default=None, max_length=255)
+
+
+class QuizExerciseForGrading(SQLModel):
+    """
+    Model for teacher-facing quiz review. Includes student's answer and correctness.
+    Not exposed to regular quiz responses.
+    """
+    exercise: ExercisePublic
+    position: int
+    solution: str | None = None
+    given_answer: str | None = None
+    is_correct: bool | None = None  # can be None if not yet graded
+
+    async def from_db(db: AsyncSession, quiz_exercise: QuizExercise) -> "QuizExerciseForGrading":
+
+        statement = select(Exercise).where(Exercise.id == quiz_exercise.exercise_id)
+        result = (await db.exec(statement)).one()
+        exercise = ExercisePublic.model_validate(result)
+        return QuizExerciseForGrading(
+            exercise=exercise,
+            position=quiz_exercise.position,
+            solution=result.solution,
+            given_answer=quiz_exercise.given_answer,
+            is_correct=quiz_exercise.is_correct
+        )
+
+class QuizForGrading(SQLModel):
+    """Model for teacher-facing quiz review. Includes detailed exercise data for grading. Should not be exposed to students.
+
+    Attributes:
+        id: Unique identifier for the quiz.
+        owner_id: Unique identifier for the user who created the quiz.
+        owner_name: Optional full name of the quiz owner.
+        title: Optional title of the quiz.
+        status: Status of the quiz.
+        submitted_at: Timestamp when the quiz was submitted.
+        exercises: List of QuizExerciseForGrading objects representing exercises in the quiz.
+        final_score: Optional final score of the quiz.
+        feedback: Optional feedback for the quiz.
+        graded_at: Optional timestamp when the quiz was graded.
+        graded_by_id: Optional unique identifier for the user who graded the quiz.
+        graded_by_name: Optional full name of the user who graded the quiz.
+        """
+    id: str
+    owner_id: str
+    owner_name: str | None = None  # e.g., full_name
+    title: str | None = None
+    status: str
+    submitted_at: datetime | None = None  # could be set on submit
+    exercises: list[QuizExerciseForGrading]
+    final_score: float | None = None
+    feedback: str | None = None
+    graded_at: datetime | None = None
+    graded_by_id: str | None = None
+    graded_by_name: str | None = None
+
+
+
+class AnswerCorrection(SQLModel):
+    """Model for saving corrections to individual answers in a quiz.
+
+    Attributes:
+        exercise_id: Unique identifier for the exercise.
+        is_correct: Boolean indicating if the answer is correct.
+        """
+    exercise_id: str
+    is_correct: bool
+
+
+class ManualGradeRequest(SQLModel):
+    """Model for submitting manual grades for a quiz.
+    Attributes:
+        corrections: list of AnswerCorrection objects representing corrections to individual answers.
+        feedback: Optional feedback for the quiz.
+        status: Status of the quiz after grading.
+        """
+
+    corrections: list[AnswerCorrection]
+    feedback: str | None = None
+    status: QuizStatusChoices = QuizStatusChoices.GRADED.value
+    final_score : int| None = None
+
+
+class CourseBase(SQLModel):
+    """Base model for courses.
+
+    Attributes:
+        title: Title of the course.
+        description: Optional description of the course.
+    """
+
+    title: str
+    description: str | None = None
+
+
+class CourseCreate(CourseBase):
+    """Model for creating a new course.
+
+    Attributes:
+        description: Optional description of the course.
+        title: Title of the course.
+        modules: list of ModuleCreate objects representing modules in the course. Can be empty.
+    """
+
+    modules: list["ModuleCreate"] = Field(default_factory=list)
+
+
+class CourseUpdate(CourseBase):
+    """Model for updating an existing course.
+
+    Attributes:
+        title: Title of the course, optional.
+        description: Description of the course, optional.
+    """
+
+    title: str | None = None
+    description: str | None = None
+
+
+class Course(CourseBase, table=True):
+    """Database model for a Course. Inherits from CourseBase.
+
+    Attributes:
+        id: Unique identifier for the course.
+        author_id: Unique identifier for the user who created the course.
+        author: Relationship to the user who created the course.
+        modules: Relationship to the modules in the course.
+        title: Title of the course.
+        description: Optional description of the course.
+        attendants: list of users enrolled in the course.
+    """
+
+    __tablename__ = "course"
+    id: str = Field(default_factory=uuid7str, primary_key=True)
+    author_id: str = Field(foreign_key="user.id")
+    author: User = Relationship(
+        sa_relationship_kwargs=(
+            {"lazy": "selectin", "foreign_keys": "Course.author_id"}
+        ),
+    )
+    modules: list["Module"] = Relationship(
+        back_populates="course",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "order_by": "Module.order",
+        },
+    )
+    attendants: list["User"] = Relationship(
+        back_populates="enrolled_courses",
+        link_model=CourseEnrollment,
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+    token: str | None = None  # for course access control
+    token_expires_at: datetime | None = None
+
+class CoursePublic(CourseBase):
+    """Public representation of a Course. Inherits from CourseBase.
+
+    Attributes:
+        id: Unique identifier for the course.
+        author_id: Unique identifier for the user who created the course.
+        title: Title of the course.
+        description: Optional description of the course.
+        module_ids: list of Module ids representing modules in the course
+        attendant_ids: list of User ids representing users enrolled in the course
+    """
+
+    id: str
+    author_id: str
+    module_ids: list[str] = Field(default_factory=list)
+    attendant_ids: list[str] = Field(default_factory=list)
+
+    @staticmethod
+    async def from_db(db: AsyncSession, course: Course) -> "CoursePublic":
+        """Create a CoursePublic instance from a Course database model."""
+        statement = (
+            select(Course)
+            .where(Course.id == course.id)
+            .options(
+                selectinload(Course.modules),
+                selectinload(Course.attendants),
+            )
+        )
+        result = await db.exec(statement)
+        course = result.one()
+        return CoursePublic(
+            id=course.id,
+            author_id=course.author_id,
+            title=course.title,
+            description=course.description,
+            module_ids=[module.id for module in course.modules],
+            attendant_ids=[user.id for user in course.attendants],
+        )
+
+
+class CoursesPublic(SQLModel):
+    """Public representation for a list of Courses.
+
+    Attributes:
+        data: List of CoursePublic objects.
+        count: Total number of courses.
+    """
+
+    data: list[CoursePublic]
+    count: int
+
+
+class ModuleBase(SQLModel):
+    """Base model for modules.
+
+    Attributes:
+        title: Title of the module.
+        content: Content of the module.
+        order: Position of the module in the course.
+        is_draft: Flag indicating if the module is a draft. True by default.
+    """
+
+    title: str
+    content: str
+    order: int
+    is_draft: bool = True
+
+
+class ModuleCreate(ModuleBase):
+    """Model for creating a new module.
+
+    Attributes:
+        title: Title of the module.
+        content: Content of the module.
+        order: Position of the module in the course.
+        is_draft: Flag indicating if the module is a draft. True by default.
+        attachments: list of Attachment ids representing attachments in the module. Optional.
+        quizzes: list of Quiz ids representing quizzes in the module. Optional.
+        course_id: Unique identifier for the course. Optional.
+    """
+
+    attachments: list[str] | None = None
+    quizzes: list[str] | None = None
+    course_id: str | None = None
+
+
+class ModuleUpdate(ModuleBase):
+    """Model for updating an existing module.
+
+    Attributes:
+        title: Optional, title of the module.
+        content: Optional, content of the module.
+        order: Optional, position of the module in the course.
+        is_draft: Optional, flag indicating if the module is a draft.
+        attachments: Optional, list of Attachment ids representing attachments in the module.
+        quizzes: Optional, list of Quiz ids representing quizzes in the module.
+    """
+
+    title: str | None = None
+    content: str | None = None
+    order: int | None = None
+    is_draft: bool | None = None
+    attachments: list[str] | None = None
+    quizzes: list[str] | None = None
+
+
+class Module(ModuleBase, table=True):
+    """Database model for a Module. Inherits from ModuleBase.
+
+    Attributes:
+        id: Unique identifier for the module.
+        course_id: Unique identifier for the course.
+        course: Relationship to the course.
+        title: Title of the module.
+        content: Content of the module.
+        order: Position of the module in the course.
+        released_at: Date and time when the module will be available.
+        is_draft: Flag indicating if the module is a draft.
+        attachments: Relationship to the attachments in the module.
+        progress: Relationship to the progress of the module for users.
+    """
+
+    __table_args__ = (
+        UniqueConstraint("course_id", "order", name="unique_module_order_per_course"),
+    )
+    __tablename__ = "module"
+    id: str = Field(default_factory=uuid7str, primary_key=True)
+    released_at: datetime | None = None
+    author_id: str = Field(foreign_key="user.id", nullable=False)
+    author: User = Relationship(
+        sa_relationship_kwargs=(
+            {"lazy": "selectin", "foreign_keys": "Module.author_id"}
+        ),
+    )
+    course_id: str = Field(foreign_key="course.id", nullable=False, ondelete="CASCADE")
+    course: Course = Relationship(
+        back_populates="modules",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+    attachments: list["Attachment"] = Relationship(back_populates="module")
+    quizzes: list["Quiz"] = Relationship(
+        back_populates="module",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+    progress: list["UserModuleProgress"] = Relationship(back_populates="module")
+
+
+class ModulePublic(ModuleBase):
+    """Public representation of a Module. Inherits from ModuleBase.
+
+    Attributes:
+        id: Unique identifier for the module.
+        course_id: Unique identifier for the course.
+        attachments: List of Attachment ids representing attachments in the module.
+        title: Title of the module.
+        content: Content of the module.
+        order: Position of the module in the course.
+        is_draft: Flag indicating if the module is a draft.
+        quizzes: List of Quiz ids representing quizzes in the module.
+    """
+
+    id: str
+    course_id: str
+    attachments: list[str] = Field(default_factory=list)  # list of attachment ids
+    quizzes: list[str] = Field(default_factory=list)
+
+    @staticmethod
+    async def from_db(db: AsyncSession, module: Module) -> "ModulePublic":
+        """Create a ModulePublic instance from a Module database model."""
+        statement = (
+            select(Module)
+            .where(Module.id == module.id)
+            .options(
+                selectinload(Module.course),  # ← This loads course
+                selectinload(Module.attachments),  # ← This loads attachments
+                selectinload(Module.quizzes),  # ← This loads quizzes
+            )
+        )
+        module = (await db.exec(statement)).first()
+        return ModulePublic(
+            id=module.id,
+            course_id=module.course.id,
+            title=module.title,
+            content=module.content,
+            order=module.order,
+            is_draft=module.is_draft,
+            attachments=[attachment.id for attachment in module.attachments],
+            quizzes=[quiz.id for quiz in module.quizzes],
+        )
+
+
+class ModulesPublic(SQLModel):
+    """Public representation for a list of Modules.
+
+    Attributes:
+        data: List of ModulePublic objects.
+        count: Total number of modules.
+    """
+
+    data: list[ModulePublic]
+    count: int
+
+
+class ModuleOrderItem(SQLModel):
+    """Model representing a module and its position.
+
+    Attributes:
+        module_id: Unique identifier for the module.
+        order: Position of the module.
+    """
+
+    module_id: str
+    order: int
+
+
+class ReorderModulesRequest(SQLModel):
+    """Request model for reordering modules in a course.
+
+    Attributes:
+        modules: List of ModuleOrderItem objects representing modules and their new positions.
+    """
+
+    modules: list[ModuleOrderItem]
+
+
+class AttachmentBase(SQLModel):
+    """Base model for attachments.
+
+    Attributes:
+        title: Title of the attachment.
+        file_url: URL to the attachment file.
+        type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
+        order: Position of the attachment in the module.
+    """
+
+    title: str
+    file_url: str
+    type: str
+    order: int = 0
+
+
+class AttachmentCreate(AttachmentBase):
+    """Model for creating new Attachment.
+
+    Attributes:
+        file_url: URL to the attachment file.
+        module_id: Unique identifier for the module.
+        title: Title of the attachment.
+        type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
+        order: Position of the attachment in the module.
+        module_id: Optional, unique identifier for the module.
+    """
+
+    module_id: str | None = None
+
+
+class AttachmentUpdate(AttachmentBase):
+    """Model for updating an existing Attachment.
+
+    Attributes:
+        title: Optional, title of the attachment.
+        file_url: Optional, URL to the attachment file.
+        type: Optional, type of the attachment.
+        order: Optional, position of the attachment in the module.
+        module_id: Optional, unique identifier for the module.
+    """
+
+    title: str | None = None
+    file_url: str | None = None
+    type: str | None = None
+    order: int | None = None
+    module_id: str | None = None
+
+
+class Attachment(AttachmentBase, table=True):
+    """Database model for an Attachment. Inherits from AttachmentBase.
+
+    Attributes:
+        id: Unique identifier for the attachment.
+        module_id: Unique identifier for the module.
+        module: Relationship to the module.
+        title: Title of the attachment.
+        file_url: URL to the attachment file.
+        type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
+        order: Position of the attachment in the module.
+    """
+
+    __table_args__ = (
+        UniqueConstraint(
+            "module_id", "order", name="unique_attachment_order_per_module"
+        ),
+    )
+    __tablename__ = "attachment"
+    id: str = Field(default_factory=uuid7str, primary_key=True)
+    module_id: str = Field(foreign_key="module.id", nullable=True, ondelete="CASCADE")
+    module: Module | None = Relationship(back_populates="attachments")
+
+
+class AttachmentPublic(AttachmentBase):
+    """Public representation of an Attachment. Inherits from AttachmentBase.
+
+    Attributes:
+        id: Unique identifier for the attachment.
+        module_id: Unique identifier for the module.
+        title: Title of the attachment.
+        file_url: URL to the attachment file.
+        type: Type of the attachment (e.g., 'file', 'presentation', 'video', 'quiz').
+        order: Position of the attachment in the module.
+    """
+
+    id: str
+    module_id: str | None
+
+    @staticmethod
+    async def from_db(db: AsyncSession, attachment: Attachment) -> "AttachmentPublic":
+        """Create an AttachmentPublic instance from an Attachment database model."""
+        statement = (
+            select(Attachment)
+            .where(Attachment.id == attachment.id)
+            .options(selectinload(Attachment.module))
+        )
+        result = await db.exec(statement)
+        attachment = result.one()
+        return AttachmentPublic(
+            id=attachment.id,
+            module_id=attachment.module_id,
+            title=attachment.title,
+            file_url=attachment.file_url,
+            type=attachment.type,
+            order=attachment.order,
+        )
+
+
+class AttachmentsPublic(SQLModel):
+    """List of AttachmentPublic objects.
+
+    Attributes:
+        data: List of AttachmentPublic objects.
+        count: Total number of attachments.
+    """
+
+    data: list[AttachmentPublic]
+    count: int
+
+
+class UserModuleProgress(SQLModel, table=True):
+    """Link model for keeping users progress of modules.
+
+    Attributes:
+        id: Unique identifier for the progress record.
+        user_id: Unique identifier for the user.
+        module_id: Unique identifier for the module.
+        started_at: Timestamp when the user started the module.
+        last_accessed: Timestamp of the last access to the module.
+        completed_at: Timestamp when the module was completed.
+        is_completed: Flag indicating if the module is completed.
+        user: Relationship to the user.
+        module: Relationship to the module.
+    """
+
+    id: str = Field(default_factory=uuid7str, primary_key=True)
+    user_id: str = Field(foreign_key="user.id")
+    module_id: str = Field(foreign_key="module.id")
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_accessed: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: datetime | None = None
+    is_completed: bool = False
+
+    user: User = Relationship(back_populates="modules")
+    module: Module = Relationship(back_populates="progress")
+
+
+class ReorderAttachments(SQLModel):
+    """Request model for reordering attachments in a module.
+
+    Attributes:
+        order_list: List of attachment IDs in the desired order.
+    """
+
+    order_list: list[str]
+
+
+
+class StudentGrades(SQLModel):
+    """Model representing a student's grades.
+
+    Attributes:
+        user_id: Unique identifier for the user.
+        user_name: Optional name of the user.
+        grades: List of QuizGrade objects representing the user's quiz grades.
+    """
+
+    user_id: str
+    user_name: str | None = None 
+    grades: list["QuizGrade"] = Field(default_factory=list)
+
+
+class QuizGrade(SQLModel):
+    """Model representing a quiz grade.
+
+    Attributes:
+        quiz_id: Unique identifier for the quiz.
+        title: Optional title of the quiz.
+        score: Score achieved in the quiz.
+        submitted_at: Timestamp when the quiz was submitted.
+    """
+
+    quiz_id: str
+    title: str | None = None
+    score: int
+    submitted_at: datetime
+
+
